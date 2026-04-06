@@ -1,180 +1,195 @@
 import { useState, useEffect } from 'react'
-import { getExpenses, saveExpenses, getMembers, getExchangeRate } from '../utils/storage'
+import { getExpenses, saveExpenses, getMembers } from '../utils/storage'
 import { calculateSettlement } from '../utils/settlement'
-import { TRIP_DATA } from '../data/tripData'
+import { useExchangeRate } from '../hooks/useExchangeRate'
 import BottomSheet from '../components/BottomSheet'
 
-const CATEGORIES = ['餐廳', '交通', '購物', '住宿', '門票', '其他']
-const CATEGORY_ICONS = { '餐廳': '🍱', '交通': '🚃', '購物': '🛍️', '住宿': '🏠', '門票': '🎟', '其他': '📌' }
+const CATEGORIES = ['餐廳','交通','購物','住宿','門票','其他']
+const CAT_ICON = { '餐廳':'🍱','交通':'🚃','購物':'🛍️','住宿':'🏠','門票':'🎟','其他':'📌' }
 
-function MemberPill({ name, selected, onToggle, color }) {
+function MemberPill({ name, selected, onToggle, activeColor }) {
   return (
-    <button
-      onClick={() => onToggle(name)}
-      style={{
-        padding: '5px 12px',
-        borderRadius: 20,
-        border: selected ? 'none' : '1px solid rgba(242,167,195,0.4)',
-        background: selected ? (color || '#F2A7C3') : 'white',
-        color: selected ? 'white' : '#2C2C2C',
-        fontSize: 13,
-        fontWeight: selected ? 600 : 400,
-        cursor: 'pointer',
-        transition: 'all 0.15s',
-        flexShrink: 0,
-      }}
-    >
-      {name}
-    </button>
+    <button onClick={() => onToggle(name)} style={{
+      padding:'5px 13px', borderRadius:20, flexShrink:0, cursor:'pointer',
+      border: selected ? 'none' : '1.5px solid var(--border)',
+      background: selected ? (activeColor||'var(--rose)') : 'var(--bg-card)',
+      color: selected ? 'white' : 'var(--ink-mid)',
+      fontSize:13, fontWeight: selected ? 600 : 400,
+      transition:'all 0.15s',
+    }}>{name}</button>
   )
 }
 
-function AddExpenseSheet({ isOpen, onClose, onSave, members }) {
+// ─── Add Expense Sheet ───────────────────────────────────────
+function AddExpenseSheet({ isOpen, onClose, onSave, members, rate, jpyToTwd, twdToJpy }) {
   const [form, setForm] = useState({
-    name: '', amount: '', paidBy: members[0] || 'YL',
-    splitWith: [...members], category: '餐廳', note: ''
+    name:'', amount:'', currency:'JPY',
+    paidBy: members[0]||'YL', splitWith:[...members],
+    category:'餐廳', note:'',
   })
 
   const reset = () => setForm({
-    name: '', amount: '', paidBy: members[0] || 'YL',
-    splitWith: [...members], category: '餐廳', note: ''
+    name:'', amount:'', currency:'JPY',
+    paidBy:members[0]||'YL', splitWith:[...members],
+    category:'餐廳', note:'',
   })
 
-  const toggleSplit = (m) => {
-    setForm(f => ({
-      ...f,
-      splitWith: f.splitWith.includes(m)
-        ? f.splitWith.filter(x => x !== m)
-        : [...f.splitWith, m]
-    }))
-  }
+  const toggleSplit = (m) => setForm(f => ({
+    ...f,
+    splitWith: f.splitWith.includes(m) ? f.splitWith.filter(x=>x!==m) : [...f.splitWith,m],
+  }))
+
+  // Normalize to JPY for storage
+  const jpyAmount = form.currency === 'JPY'
+    ? Number(form.amount)||0
+    : twdToJpy(Number(form.amount)||0)
+
+  const perPerson = form.splitWith.length > 0
+    ? Math.round(jpyAmount / form.splitWith.length) : 0
+
+  const perPersonTWD = jpyToTwd(perPerson)
 
   const handleSave = () => {
     if (!form.name.trim() || !form.amount) return
     onSave({
       id: `exp_${Date.now()}`,
-      ...form,
-      amount: Number(form.amount),
-      date: new Date().toISOString().slice(0, 10),
+      name: form.name,
+      amount: jpyAmount,
+      currency: 'JPY',
+      inputCurrency: form.currency,
+      inputAmount: Number(form.amount),
+      paidBy: form.paidBy,
+      splitWith: form.splitWith,
+      category: form.category,
+      date: new Date().toISOString().slice(0,10),
+      note: form.note,
     })
-    reset()
-    onClose()
+    reset(); onClose()
   }
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} height="85vh">
-      <div style={{ padding: '0 16px 32px' }}>
-        <div style={{ fontSize: 17, fontWeight: 700, color: '#2C2C2C', marginBottom: 20 }}>
-          💰 新增費用
+    <BottomSheet isOpen={isOpen} onClose={onClose} height="88vh">
+      <div style={{ padding:'0 16px 32px' }}>
+        <div style={{ fontFamily:'Cormorant Garant,serif', fontSize:20, fontWeight:600, color:'var(--ink)', marginBottom:20 }}>
+          新增費用
         </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
           <div>
-            <label style={labelStyle}>名稱</label>
-            <input className="input-field" placeholder="費用名稱" value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+            <label style={lbl}>名稱</label>
+            <input className="input-field" placeholder="費用名稱"
+              value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}/>
+          </div>
+
+          {/* Currency + Amount */}
+          <div>
+            <label style={lbl}>幣別與金額</label>
+            <div style={{ display:'flex', gap:8, marginBottom:8 }}>
+              <button onClick={()=>setForm(f=>({...f,currency:'JPY'}))} style={currBtn(form.currency==='JPY')}>
+                ¥ 日幣
+              </button>
+              <button onClick={()=>setForm(f=>({...f,currency:'TWD'}))} style={currBtn(form.currency==='TWD')}>
+                NT$ 台幣
+              </button>
+            </div>
+            <input className="input-field" type="number" inputMode="decimal"
+              placeholder={form.currency==='JPY'?'¥ 金額':'NT$ 金額'}
+              value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))}/>
+            {form.amount > 0 && (
+              <div style={{ fontSize:11, color:'var(--ink-soft)', marginTop:4 }}>
+                {form.currency==='JPY'
+                  ? `≈ NT$${jpyToTwd(Number(form.amount)).toLocaleString()}`
+                  : `≈ ¥${twdToJpy(Number(form.amount)).toLocaleString()}`
+                }
+              </div>
+            )}
           </div>
 
           <div>
-            <label style={labelStyle}>金額（¥）</label>
-            <input className="input-field" placeholder="0" type="number" inputMode="numeric"
-              value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
-          </div>
-
-          <div>
-            <label style={labelStyle}>付款人</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            <label style={lbl}>付款人</label>
+            <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
               {members.map(m => (
-                <MemberPill key={m} name={m} selected={form.paidBy === m}
-                  onToggle={() => setForm(f => ({ ...f, paidBy: m }))}
-                  color="#C0392B"
-                />
+                <MemberPill key={m} name={m} selected={form.paidBy===m}
+                  onToggle={()=>setForm(f=>({...f,paidBy:m}))} activeColor="var(--amber)"/>
               ))}
             </div>
           </div>
 
           <div>
-            <label style={labelStyle}>分帳成員</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            <label style={lbl}>分帳成員</label>
+            <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
               {members.map(m => (
-                <MemberPill key={m} name={m} selected={form.splitWith.includes(m)}
-                  onToggle={toggleSplit}
-                />
+                <MemberPill key={m} name={m} selected={form.splitWith.includes(m)} onToggle={toggleSplit}/>
               ))}
             </div>
-            <div style={{ fontSize: 11, color: '#95A5A6', marginTop: 4 }}>
-              每人 ¥{form.splitWith.length > 0 ? Math.round(Number(form.amount || 0) / form.splitWith.length) : 0}
-            </div>
+            {form.amount > 0 && form.splitWith.length > 0 && (
+              <div style={{ fontSize:11, color:'var(--ink-soft)', marginTop:5 }}>
+                每人 ¥{perPerson.toLocaleString()} ≈ NT${perPersonTWD.toLocaleString()}
+              </div>
+            )}
           </div>
 
           <div>
-            <label style={labelStyle}>類別</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            <label style={lbl}>類別</label>
+            <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
               {CATEGORIES.map(cat => (
-                <button key={cat} onClick={() => setForm(f => ({ ...f, category: cat }))}
-                  style={{
-                    padding: '5px 12px', borderRadius: 20, cursor: 'pointer',
-                    border: form.category === cat ? 'none' : '1px solid rgba(242,167,195,0.4)',
-                    background: form.category === cat ? '#F2A7C3' : 'white',
-                    color: form.category === cat ? 'white' : '#2C2C2C',
-                    fontSize: 13, transition: 'all 0.15s',
-                  }}>
-                  {CATEGORY_ICONS[cat]} {cat}
-                </button>
+                <button key={cat} onClick={()=>setForm(f=>({...f,category:cat}))} style={{
+                  padding:'5px 12px', borderRadius:20, cursor:'pointer', fontSize:13,
+                  border: form.category===cat ? 'none' : '1.5px solid var(--border)',
+                  background: form.category===cat ? 'var(--rose)' : 'var(--bg-card)',
+                  color: form.category===cat ? 'white' : 'var(--ink-mid)',
+                  transition:'all 0.15s',
+                }}>{CAT_ICON[cat]} {cat}</button>
               ))}
             </div>
           </div>
 
           <div>
-            <label style={labelStyle}>備註（選填）</label>
-            <input className="input-field" placeholder="" value={form.note}
-              onChange={e => setForm(f => ({ ...f, note: e.target.value }))} />
+            <label style={lbl}>備註（選填）</label>
+            <input className="input-field" value={form.note}
+              onChange={e=>setForm(f=>({...f,note:e.target.value}))}/>
           </div>
 
-          <button onClick={handleSave} style={saveButtonStyle}>
-            確認新增
-          </button>
+          <button className="btn-primary" onClick={handleSave}>確認新增</button>
+          <button className="btn-secondary" onClick={onClose}>取消</button>
         </div>
       </div>
     </BottomSheet>
   )
 }
 
-function SettlementSheet({ isOpen, onClose, expenses, members }) {
-  const rate = getExchangeRate()
+// ─── Settlement Sheet ────────────────────────────────────────
+function SettlementSheet({ isOpen, onClose, expenses, members, jpyToTwd }) {
   const { paid, shouldPay, balance, transfers } = calculateSettlement(expenses, members)
-
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} height="80vh">
-      <div style={{ padding: '0 16px 32px' }}>
-        <div style={{ fontSize: 17, fontWeight: 700, color: '#2C2C2C', marginBottom: 16 }}>
-          📊 結帳結算
+    <BottomSheet isOpen={isOpen} onClose={onClose} height="82vh">
+      <div style={{ padding:'0 16px 32px' }}>
+        <div style={{ fontFamily:'Cormorant Garant,serif', fontSize:20, fontWeight:600, color:'var(--ink)', marginBottom:18 }}>
+          結帳結算
         </div>
 
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#8B5E72', marginBottom: 10 }}>
-            個人費用明細
-          </div>
+        <div style={{ marginBottom:20 }}>
+          <div className="section-label">個人明細</div>
           {members.map(m => {
-            const b = balance[m] || 0
+            const b = balance[m]||0
             return (
               <div key={m} style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '10px 12px', marginBottom: 6,
-                background: b > 0 ? '#EAFAF1' : b < 0 ? '#FDECEA' : '#F8F9FA',
-                borderRadius: 10, border: `1px solid ${b > 0 ? '#27AE60' : b < 0 ? '#C0392B' : '#DEE2E6'}22`,
+                display:'flex', alignItems:'center', justifyContent:'space-between',
+                padding:'10px 13px', marginBottom:6,
+                background: b>0.5?'var(--sage-pale)':b<-0.5?'var(--rose-pale)':'var(--bg)',
+                borderRadius:'var(--radius-sm)',
+                border:`1px solid ${b>0.5?'var(--sage-light)':b<-0.5?'var(--rose-light)':'var(--border)'}`,
               }}>
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>{m}</div>
-                  <div style={{ fontSize: 11, color: '#95A5A6' }}>
-                    已付 ¥{Math.round(paid[m] || 0).toLocaleString()} · 應付 ¥{Math.round(shouldPay[m] || 0).toLocaleString()}
+                  <div style={{ fontSize:14, fontWeight:600, color:'var(--ink)' }}>{m}</div>
+                  <div style={{ fontSize:11, color:'var(--ink-soft)' }}>
+                    已付 ¥{Math.round(paid[m]||0).toLocaleString()} · 應付 ¥{Math.round(shouldPay[m]||0).toLocaleString()}
                   </div>
                 </div>
                 <div style={{
-                  fontSize: 14, fontWeight: 700,
-                  color: b > 0 ? '#27AE60' : b < 0 ? '#C0392B' : '#95A5A6',
+                  fontSize:14, fontWeight:700,
+                  color: b>0.5?'var(--sage)':b<-0.5?'var(--rose)':'var(--ink-soft)',
                 }}>
-                  {b > 0 ? '＋' : ''}¥{Math.round(b).toLocaleString()}
+                  {b>0?'＋':''}¥{Math.round(b).toLocaleString()}
                 </div>
               </div>
             )
@@ -183,38 +198,34 @@ function SettlementSheet({ isOpen, onClose, expenses, members }) {
 
         {transfers.length > 0 && (
           <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#8B5E72', marginBottom: 10 }}>
-              轉帳清單
-            </div>
-            {transfers.map((t, i) => (
+            <div className="section-label">轉帳清單</div>
+            {transfers.map((t,i) => (
               <div key={i} style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '10px 14px', marginBottom: 6,
-                background: 'white',
-                borderRadius: 10,
-                border: '1px solid rgba(242,167,195,0.3)',
-                boxShadow: '2px 4px 8px rgba(242,167,195,0.15)',
+                display:'flex', alignItems:'center', justifyContent:'space-between',
+                padding:'12px 14px', marginBottom:6,
+                background:'var(--bg-card)', borderRadius:'var(--radius)',
+                border:'1px solid var(--border)',
+                boxShadow:'var(--shadow-card)',
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: '#C0392B' }}>{t.from}</span>
-                  <span style={{ fontSize: 13, color: '#95A5A6' }}>→</span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: '#27AE60' }}>{t.to}</span>
+                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  <span style={{ fontWeight:700, color:'var(--rose)', fontSize:14 }}>{t.from}</span>
+                  <span style={{ color:'var(--ink-faint)' }}>→</span>
+                  <span style={{ fontWeight:700, color:'var(--sage)', fontSize:14 }}>{t.to}</span>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: '#2C2C2C' }}>
+                <div style={{ textAlign:'right' }}>
+                  <div style={{ fontSize:16, fontWeight:700, fontFamily:'Cormorant Garant,serif', color:'var(--ink)' }}>
                     ¥{t.amount.toLocaleString()}
                   </div>
-                  <div style={{ fontSize: 11, color: '#95A5A6' }}>
-                    ≈ NT${Math.round(t.amount * (rate.JPY_TWD || 0.218)).toLocaleString()}
+                  <div style={{ fontSize:11, color:'var(--ink-soft)' }}>
+                    ≈ NT${jpyToTwd(t.amount).toLocaleString()}
                   </div>
                 </div>
               </div>
             ))}
           </div>
         )}
-
         {transfers.length === 0 && (
-          <div style={{ textAlign: 'center', color: '#27AE60', padding: 20, fontSize: 14 }}>
+          <div style={{ textAlign:'center', padding:'24px 0', color:'var(--sage)', fontSize:14, fontWeight:500 }}>
             ✅ 已結清，無需轉帳！
           </div>
         )}
@@ -223,137 +234,147 @@ function SettlementSheet({ isOpen, onClose, expenses, members }) {
   )
 }
 
-const labelStyle = {
-  display: 'block', fontSize: 13, fontWeight: 600,
-  color: '#8B5E72', marginBottom: 6,
-}
+const lbl = { display:'block', fontSize:12, fontWeight:600, color:'var(--ink-mid)', marginBottom:5 }
+const currBtn = (active) => ({
+  flex:1, padding:'9px 8px', borderRadius:'var(--radius-sm)', cursor:'pointer', fontSize:13, fontWeight:600,
+  border: active ? 'none' : '1.5px solid var(--border)',
+  background: active ? 'var(--amber)' : 'var(--bg-card)',
+  color: active ? 'white' : 'var(--ink-mid)', transition:'all 0.15s',
+})
 
-const saveButtonStyle = {
-  width: '100%', padding: '13px',
-  background: 'linear-gradient(135deg, #F2A7C3, #ED89AB)',
-  color: 'white', border: 'none', borderRadius: 12,
-  fontSize: 15, fontWeight: 700, cursor: 'pointer',
-}
-
+// ─── Main ────────────────────────────────────────────────────
 export default function ExpensesTab() {
   const [expenses, setExpenses] = useState(getExpenses)
   const [members] = useState(getMembers)
   const [showAdd, setShowAdd] = useState(false)
   const [showSettlement, setShowSettlement] = useState(false)
-  const [showJPY, setShowJPY] = useState(true)
-  const rate = getExchangeRate()
+  const [displayCurrency, setDisplayCurrency] = useState('JPY')
+  const { rate, jpyToTwd, twdToJpy, lastUpdated, loading, fetchRate } = useExchangeRate()
 
-  const total = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
-  const totalTWD = Math.round(total * (rate.JPY_TWD || 0.218))
+  // Refresh expenses when tab gains focus (from quick-add)
+  useEffect(() => {
+    const refresh = () => setExpenses(getExpenses())
+    window.addEventListener('focus', refresh)
+    return () => window.removeEventListener('focus', refresh)
+  }, [])
+
+  const totalJPY = expenses.reduce((s,e) => s + (Number(e.amount)||0), 0)
+  const totalTWD = jpyToTwd(totalJPY)
 
   const handleSave = (exp) => {
     const updated = [...expenses, exp]
-    setExpenses(updated)
-    saveExpenses(updated)
+    setExpenses(updated); saveExpenses(updated)
   }
 
   const handleDelete = (id) => {
     const updated = expenses.filter(e => e.id !== id)
-    setExpenses(updated)
-    saveExpenses(updated)
+    setExpenses(updated); saveExpenses(updated)
   }
 
   // Group by date
   const grouped = {}
-  expenses.forEach(e => {
-    if (!grouped[e.date]) grouped[e.date] = []
-    grouped[e.date].push(e)
-  })
+  expenses.forEach(e => { if(!grouped[e.date]) grouped[e.date]=[]; grouped[e.date].push(e) })
+
+  const fmtAmt = (jpyAmt) => displayCurrency === 'JPY'
+    ? `¥${Number(jpyAmt).toLocaleString()}`
+    : `NT$${jpyToTwd(jpyAmt).toLocaleString()}`
 
   return (
     <div>
-      {/* Summary header */}
-      <div style={{
-        margin: 16,
-        padding: '16px',
-        background: 'linear-gradient(135deg, #F2A7C3, #ED89AB)',
-        borderRadius: 16,
-        boxShadow: '2px 4px 16px rgba(242,167,195,0.4)',
-        color: 'white',
-      }}>
-        <div style={{ fontSize: 13, opacity: 0.9, marginBottom: 4 }}>總花費</div>
-        <div style={{ fontSize: 28, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-          {showJPY ? `¥${total.toLocaleString()}` : `NT$${totalTWD.toLocaleString()}`}
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-          <div style={{ fontSize: 12, opacity: 0.8 }}>
-            {showJPY ? `≈ NT$${totalTWD.toLocaleString()}` : `¥${total.toLocaleString()}`}
+      {/* Summary card */}
+      <div style={{ margin:16 }}>
+        <div style={{
+          padding:'18px 18px 14px',
+          background:'linear-gradient(135deg,#C4968C,#9B7068)',
+          borderRadius:'var(--radius-lg)',
+          boxShadow:'0 6px 24px rgba(196,150,140,0.38)',
+          color:'white',
+        }}>
+          <div style={{ fontSize:12, opacity:0.85, letterSpacing:'0.06em', fontFamily:'Cormorant Garant,serif', marginBottom:4 }}>
+            TOTAL EXPENSES
           </div>
-          <button
-            onClick={() => setShowJPY(v => !v)}
-            style={{
-              background: 'rgba(255,255,255,0.25)', border: 'none', borderRadius: 12,
-              padding: '4px 10px', color: 'white', fontSize: 12, cursor: 'pointer', fontWeight: 600,
-            }}
-          >
-            切換 {showJPY ? 'NT$' : '¥'}
-          </button>
+          <div style={{ fontSize:32, fontWeight:300, fontFamily:'Cormorant Garant,serif', letterSpacing:'0.02em' }}>
+            {displayCurrency==='JPY' ? `¥${totalJPY.toLocaleString()}` : `NT$${totalTWD.toLocaleString()}`}
+          </div>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:10 }}>
+            <div>
+              <div style={{ fontSize:12, opacity:0.75 }}>
+                {displayCurrency==='JPY' ? `≈ NT$${totalTWD.toLocaleString()}` : `¥${totalJPY.toLocaleString()}`}
+              </div>
+              <div style={{ fontSize:10, opacity:0.6, marginTop:2 }}>
+                {loading ? '匯率更新中…' : `1¥ = NT$${rate.toFixed(4)}${lastUpdated ? ` · ${lastUpdated}` : ''}`}
+              </div>
+            </div>
+            <div style={{ display:'flex', gap:6 }}>
+              <button onClick={()=>setDisplayCurrency(v=>v==='JPY'?'TWD':'JPY')} style={{
+                background:'rgba(255,255,255,0.22)', border:'none', borderRadius:12,
+                padding:'5px 12px', color:'white', fontSize:12, cursor:'pointer', fontWeight:600,
+              }}>
+                {displayCurrency==='JPY'?'顯示 NT$':'顯示 ¥'}
+              </button>
+              <button onClick={fetchRate} style={{
+                background:'rgba(255,255,255,0.15)', border:'none', borderRadius:12,
+                padding:'5px 8px', color:'white', fontSize:12, cursor:'pointer',
+              }}>🔄</button>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Settlement button */}
-      <div style={{ padding: '0 16px 12px' }}>
-        <button
-          onClick={() => setShowSettlement(true)}
-          style={{
-            width: '100%', padding: '11px',
-            background: 'white', border: '1.5px solid rgba(242,167,195,0.5)',
-            borderRadius: 12, fontSize: 14, color: '#8B5E72',
-            cursor: 'pointer', fontWeight: 600,
-            boxShadow: '2px 4px 8px rgba(242,167,195,0.15)',
-          }}
-        >
-          📊 查看結帳結算
+      {/* Settlement */}
+      <div style={{ padding:'0 16px 10px' }}>
+        <button onClick={()=>setShowSettlement(true)} style={{
+          width:'100%', padding:'11px',
+          background:'var(--bg-card)', border:'1.5px solid var(--border)',
+          borderRadius:'var(--radius-sm)', fontSize:13, color:'var(--ink-mid)',
+          cursor:'pointer', fontWeight:600, boxShadow:'var(--shadow-card)',
+          fontFamily:'Cormorant Garant,serif', letterSpacing:'0.03em',
+        }}>
+          📊 結帳結算
         </button>
       </div>
 
       {/* Expense list */}
-      <div style={{ padding: '0 16px' }}>
+      <div style={{ padding:'0 16px' }}>
         {Object.keys(grouped).sort().map(date => (
-          <div key={date} style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 12, color: '#95A5A6', fontWeight: 600, marginBottom: 8, paddingLeft: 4 }}>
-              {new Date(date).toLocaleDateString('zh-TW', { month: 'long', day: 'numeric', weekday: 'short' })}
+          <div key={date} style={{ marginBottom:14 }}>
+            <div style={{
+              fontSize:13, color:'var(--ink-soft)', fontWeight:600,
+              marginBottom:6, paddingLeft:4, letterSpacing:'0.04em',
+              fontFamily:'Cormorant Garant,serif',
+            }}>
+              {new Date(date).toLocaleDateString('zh-TW',{month:'long',day:'numeric',weekday:'short'})}
             </div>
             {grouped[date].map(exp => (
               <div key={exp.id} style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '11px 14px', marginBottom: 6,
-                background: 'white', borderRadius: 12,
-                border: '1px solid rgba(242,167,195,0.2)',
-                boxShadow: '2px 4px 8px rgba(242,167,195,0.1)',
+                display:'flex', alignItems:'center', justifyContent:'space-between',
+                padding:'11px 14px', marginBottom:6,
+                background:'var(--bg-card)', borderRadius:'var(--radius)',
+                border:'1px solid var(--border)', boxShadow:'var(--shadow-card)',
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 20 }}>{CATEGORY_ICONS[exp.category] || '📌'}</span>
+                <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                  <span style={{ fontSize:20 }}>{CAT_ICON[exp.category]||'📌'}</span>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: '#2C2C2C' }}>{exp.name}</div>
-                    <div style={{ fontSize: 11, color: '#95A5A6' }}>
-                      {exp.paidBy} 付 · 分 {exp.splitWith?.length || 0} 人
+                    <div style={{ fontSize:14, fontWeight:500, color:'var(--ink)' }}>{exp.name}</div>
+                    <div style={{ fontSize:11, color:'var(--ink-soft)' }}>
+                      {exp.paidBy} 付 · {exp.splitWith?.length||0} 人分
                     </div>
                   </div>
                 </div>
-                <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ textAlign:'right', display:'flex', alignItems:'center', gap:8 }}>
                   <div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: '#2C2C2C' }}>
-                      ¥{Number(exp.amount).toLocaleString()}
-                    </div>
-                    <div style={{ fontSize: 11, color: '#95A5A6' }}>
-                      NT${Math.round(Number(exp.amount) * (rate.JPY_TWD || 0.218)).toLocaleString()}
+                    <div style={{
+                      fontSize:15, fontWeight:700,
+                      fontFamily:'Cormorant Garant,serif', color:'var(--ink)',
+                    }}>{fmtAmt(exp.amount)}</div>
+                    <div style={{ fontSize:10, color:'var(--ink-soft)' }}>
+                      {displayCurrency==='JPY'?`NT$${jpyToTwd(exp.amount).toLocaleString()}`:`¥${Number(exp.amount).toLocaleString()}`}
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleDelete(exp.id)}
-                    style={{
-                      background: 'none', border: 'none', color: '#F2A7C3',
-                      fontSize: 18, cursor: 'pointer', padding: '0 4px', lineHeight: 1,
-                    }}
-                  >
-                    ×
-                  </button>
+                  <button onClick={()=>handleDelete(exp.id)} style={{
+                    background:'none', border:'none', color:'var(--rose-light)',
+                    fontSize:18, cursor:'pointer', padding:'0 4px', lineHeight:1,
+                  }}>×</button>
                 </div>
               </div>
             ))}
@@ -361,29 +382,34 @@ export default function ExpensesTab() {
         ))}
 
         {expenses.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '48px 0', color: '#BDC3C7' }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>💰</div>
-            <div style={{ fontSize: 14 }}>尚無費用記錄</div>
-            <div style={{ fontSize: 12, marginTop: 4 }}>點右下角 ＋ 開始記帳</div>
+          <div style={{ textAlign:'center', padding:'52px 0', color:'var(--ink-faint)' }}>
+            <div style={{ fontSize:40, marginBottom:12 }}>💴</div>
+            <div style={{ fontFamily:'Cormorant Garant,serif', fontSize:16, color:'var(--ink-soft)' }}>
+              尚無消費紀錄
+            </div>
+            <div style={{ fontSize:12, marginTop:4 }}>點右下角 ＋ 開始記帳</div>
           </div>
         )}
       </div>
 
       {/* FAB */}
-      <button className="fab" onClick={() => setShowAdd(true)}>＋</button>
+      <button className="fab" onClick={()=>setShowAdd(true)}>＋</button>
 
       <AddExpenseSheet
         isOpen={showAdd}
-        onClose={() => setShowAdd(false)}
+        onClose={()=>setShowAdd(false)}
         onSave={handleSave}
         members={members}
+        rate={rate}
+        jpyToTwd={jpyToTwd}
+        twdToJpy={twdToJpy}
       />
-
       <SettlementSheet
         isOpen={showSettlement}
-        onClose={() => setShowSettlement(false)}
+        onClose={()=>setShowSettlement(false)}
         expenses={expenses}
         members={members}
+        jpyToTwd={jpyToTwd}
       />
     </div>
   )

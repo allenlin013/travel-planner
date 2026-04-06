@@ -2,77 +2,31 @@ import { TRIP_DATA, MEMBERS, EXCHANGE_RATE } from '../data/tripData'
 import { DEFAULT_CHECKLIST } from '../data/checklistData'
 
 export function initStorage() {
-  if (!localStorage.getItem('trip_data')) {
-    localStorage.setItem('trip_data', JSON.stringify(TRIP_DATA))
-  }
-  if (!localStorage.getItem('members')) {
-    localStorage.setItem('members', JSON.stringify(MEMBERS))
-  }
-  if (!localStorage.getItem('exchange_rate')) {
-    localStorage.setItem('exchange_rate', JSON.stringify(EXCHANGE_RATE))
-  }
-  if (!localStorage.getItem('expenses')) {
-    localStorage.setItem('expenses', JSON.stringify([]))
-  }
-  if (!localStorage.getItem('checklist')) {
-    localStorage.setItem('checklist', JSON.stringify(DEFAULT_CHECKLIST))
-  }
-  if (!localStorage.getItem('documents')) {
-    localStorage.setItem('documents', JSON.stringify([]))
-  }
-  if (!localStorage.getItem('current_member')) {
-    localStorage.setItem('current_member', 'YL')
-  }
+  if (!localStorage.getItem('trip_data'))     localStorage.setItem('trip_data', JSON.stringify(TRIP_DATA))
+  if (!localStorage.getItem('members'))       localStorage.setItem('members', JSON.stringify(MEMBERS))
+  if (!localStorage.getItem('exchange_rate')) localStorage.setItem('exchange_rate', JSON.stringify(EXCHANGE_RATE))
+  if (!localStorage.getItem('expenses'))      localStorage.setItem('expenses', JSON.stringify([]))
+  if (!localStorage.getItem('checklist'))     localStorage.setItem('checklist', JSON.stringify(DEFAULT_CHECKLIST))
+  if (!localStorage.getItem('documents'))     localStorage.setItem('documents', JSON.stringify([]))
+  if (!localStorage.getItem('current_member'))localStorage.setItem('current_member', 'YL')
 }
 
-export function getTripData() {
-  return JSON.parse(localStorage.getItem('trip_data') || 'null') || TRIP_DATA
-}
+export const getTripData   = () => JSON.parse(localStorage.getItem('trip_data'))    || TRIP_DATA
+export const saveTripData  = (d) => localStorage.setItem('trip_data', JSON.stringify(d))
+export const getMembers    = () => JSON.parse(localStorage.getItem('members'))       || MEMBERS
+export const getExchangeRate=()=> JSON.parse(localStorage.getItem('exchange_rate')) || EXCHANGE_RATE
 
-export function getMembers() {
-  return JSON.parse(localStorage.getItem('members') || 'null') || MEMBERS
-}
+export const getStopNote   = (id) => localStorage.getItem(`stop_notes_${id}`) || ''
+export const setStopNote   = (id, v) => localStorage.setItem(`stop_notes_${id}`, v)
 
-export function getExchangeRate() {
-  return JSON.parse(localStorage.getItem('exchange_rate') || 'null') || EXCHANGE_RATE
-}
+export const getExpenses   = () => JSON.parse(localStorage.getItem('expenses') || '[]')
+export const saveExpenses  = (d) => localStorage.setItem('expenses', JSON.stringify(d))
 
-export function getStopNote(stopId) {
-  return localStorage.getItem(`stop_notes_${stopId}`) || ''
-}
+export const getChecklist  = () => JSON.parse(localStorage.getItem('checklist'))    || DEFAULT_CHECKLIST
+export const saveChecklist = (d) => localStorage.setItem('checklist', JSON.stringify(d))
 
-export function setStopNote(stopId, note) {
-  localStorage.setItem(`stop_notes_${stopId}`, note)
-}
+export const getDocuments  = () => JSON.parse(localStorage.getItem('documents') || '[]')
+export const saveDocuments = (d) => localStorage.setItem('documents', JSON.stringify(d))
 
-export function getExpenses() {
-  return JSON.parse(localStorage.getItem('expenses') || '[]')
-}
-
-export function saveExpenses(expenses) {
-  localStorage.setItem('expenses', JSON.stringify(expenses))
-}
-
-export function getChecklist() {
-  return JSON.parse(localStorage.getItem('checklist') || 'null') || DEFAULT_CHECKLIST
-}
-
-export function saveChecklist(checklist) {
-  localStorage.setItem('checklist', JSON.stringify(checklist))
-}
-
-export function getDocuments() {
-  return JSON.parse(localStorage.getItem('documents') || '[]')
-}
-
-export function saveDocuments(docs) {
-  localStorage.setItem('documents', JSON.stringify(docs))
-}
-
-export function getCurrentMember() {
-  return localStorage.getItem('current_member') || 'YL'
-}
-
-export function setCurrentMember(member) {
-  localStorage.setItem('current_member', member)
-}
+export const getCurrentMember = () => localStorage.getItem('current_member') || 'YL'
+export const setCurrentMember = (m) => localStorage.setItem('current_member', m)

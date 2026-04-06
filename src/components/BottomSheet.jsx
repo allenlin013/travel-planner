@@ -1,37 +1,24 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 
-export default function BottomSheet({ isOpen, onClose, children, height = '75vh', maxHeight = '90dvh' }) {
-  const sheetRef = useRef(null)
-
-  // Lock body scroll when open
+export default function BottomSheet({ isOpen, onClose, children, height = '75vh', maxHeight = '92dvh' }) {
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = ''
-    }
+    document.body.style.overflow = isOpen ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
   }, [isOpen])
 
   return (
     <>
-      {/* Backdrop */}
+      <div className={`sheet-backdrop ${isOpen ? '' : 'sheet-backdrop-hidden'}`} onClick={onClose}/>
       <div
-        className={`sheet-backdrop ${isOpen ? '' : 'sheet-backdrop-hidden'}`}
-        onClick={onClose}
-      />
-      {/* Sheet */}
-      <div
-        ref={sheetRef}
         className={`sheet-panel ${isOpen ? 'sheet-panel-visible' : 'sheet-panel-hidden'}`}
         style={{ height, maxHeight }}
       >
         {/* Drag handle */}
-        <div className="flex justify-center pt-3 pb-2 flex-shrink-0">
-          <div className="w-10 h-1 rounded-full" style={{ background: '#E0D0D8' }} />
+        <div style={{ display:'flex', justifyContent:'center', padding:'12px 0 8px', flexShrink:0 }}>
+          <div style={{ width:36, height:4, borderRadius:2, background:'var(--rose-light)' }}/>
         </div>
         {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        <div style={{ flex:1, overflowY:'auto', overflowX:'hidden' }}>
           {children}
         </div>
       </div>
