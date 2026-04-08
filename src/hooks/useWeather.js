@@ -17,15 +17,15 @@ const DAY_REGION = {
 
 // WMO weather code → icon name + Chinese label
 function decodeWMO(code) {
-  if (code === 0)       return { icon: 'sun',       label: '晴',   wmo: code }
-  if (code <= 2)        return { icon: 'cloud',      label: '多雲', wmo: code }
-  if (code === 3)       return { icon: 'cloud',      label: '陰',   wmo: code }
-  if (code <= 49)       return { icon: 'wind',       label: '霧',   wmo: code }
-  if (code <= 55)       return { icon: 'cloudRain',  label: '毛毛雨', wmo: code }
-  if (code <= 67)       return { icon: 'cloudRain',  label: '雨',   wmo: code }
-  if (code <= 77)       return { icon: 'cloudSnow',  label: '雪',   wmo: code }
-  if (code <= 82)       return { icon: 'cloudRain',  label: '陣雨', wmo: code }
-  return                       { icon: 'cloudRain',  label: '雷雨', wmo: code }
+  if (code === 0)  return { icon: 'sun',       label: '晴'   }
+  if (code <= 2)   return { icon: 'cloud',     label: '多雲' }
+  if (code === 3)  return { icon: 'cloud',     label: '陰'   }
+  if (code <= 49)  return { icon: 'wind',      label: '霧'   }
+  if (code <= 55)  return { icon: 'cloudRain', label: '毛毛雨' }
+  if (code <= 67)  return { icon: 'cloudRain', label: '雨'   }
+  if (code <= 77)  return { icon: 'cloudSnow', label: '雪'   }
+  if (code <= 82)  return { icon: 'cloudRain', label: '陣雨' }
+  return                  { icon: 'cloudRain', label: '雷雨' }
 }
 
 // Typical Osaka April weather (fallback)
@@ -47,12 +47,13 @@ function buildTypical(dates) {
   })
 }
 
-const CACHE_PREFIX = 'weather_v2_'
-const CACHE_TTL = 3 * 3600 * 1000  // 3 hours
+const CACHE_PREFIX = 'weather_v3_'
+const CACHE_TTL    = 3 * 3600 * 1000  // 3 hours
 
 export function useWeather(dates) {
-  const [weather,   setWeather]   = useState(null)
-  const [isTypical, setIsTypical] = useState(false)
+  const [weather,      setWeather]      = useState(null)
+  const [isTypical,    setIsTypical]    = useState(false)
+  const [hourlyByDate, setHourlyByDate] = useState(null)
 
   useEffect(() => {
     if (!dates || dates.length === 0) return
@@ -65,22 +66,21 @@ export function useWeather(dates) {
         if (Date.now() - ts < CACHE_TTL) {
           setWeather(data.weather)
           setIsTypical(data.isTypical)
+          setHourlyByDate(data.hourlyByDate || null)
           return
         }
       }
     } catch (_) {}
 
-    // Fetch for each unique region
     const start = dates[0]
     const end   = dates[dates.length - 1]
-
-    // Use Osaka coordinates as primary (good enough for Kyoto/Nara proximity)
     const { lat, lon } = REGION_COORDS.osaka
 
     fetch(
       `https://api.open-meteo.com/v1/forecast` +
       `?latitude=${lat}&longitude=${lon}` +
       `&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max` +
+      `&hourly=temperature_2m,apparent_temperature,precipitation_probability,weather_code` +
       `&timezone=Asia%2FTokyo&start_date=${start}&end_date=${end}` +
       `&forecast_days=16`
     )
@@ -98,21 +98,43 @@ export function useWeather(dates) {
           region: DAY_REGION[date] || 'osaka',
         }))
 
+        // Parse hourly data grouped by date
+        const hourlyByDate = {}
+        const h = json.hourly
+        if (h?.time) {
+          h.time.forEach((timeStr, i) => {
+            const date = timeStr.slice(0, 10)
+            const hour = parseInt(timeStr.slice(11, 13))
+            if (!hourlyByDate[date]) hourlyByDate[date] = []
+            hourlyByDate[date].push({
+              hour,
+              temp:       Math.round(h.temperature_2m[i] ?? 0),
+              apparent:   Math.round(h.apparent_temperature[i] ?? 0),
+              precipProb: h.precipitation_probability[i] ?? 0,
+              ...decodeWMO(h.weather_code[i] ?? 0),
+            })
+          })
+        }
+
         setWeather(w)
         setIsTypical(false)
+        setHourlyByDate(Object.keys(hourlyByDate).length > 0 ? hourlyByDate : null)
         localStorage.setItem(cacheKey, JSON.stringify({
-          data: { weather: w, isTypical: false }, ts: Date.now()
+          data: { weather: w, isTypical: false, hourlyByDate },
+          ts: Date.now(),
         }))
       })
       .catch(() => {
         const w = buildTypical(dates)
         setWeather(w)
         setIsTypical(true)
+        setHourlyByDate(null)
         localStorage.setItem(cacheKey, JSON.stringify({
-          data: { weather: w, isTypical: true }, ts: Date.now()
+          data: { weather: w, isTypical: true, hourlyByDate: null },
+          ts: Date.now(),
         }))
       })
   }, [dates?.join(',')])
 
-  return { weather, isTypical }
+  return { weather, isTypical, hourlyByDate }
 }
