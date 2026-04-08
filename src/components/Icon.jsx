@@ -30,6 +30,10 @@ export default function Icon({ name, size = 20, color = 'currentColor', strokeWi
       return <svg {...props}><circle cx="13" cy="4" r="1.5"/><path d="M10 8.5l2 2 2-2M8 21l2-6 3 3 3-5"/><path d="M14.5 13.5L18 11"/><path d="M9.5 14L6 12"/></svg>
     case 'taxi':
       return <svg {...props}><path d="M5 17H3a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2"/><circle cx="7.5" cy="17" r="2.5"/><circle cx="16.5" cy="17" r="2.5"/><path d="M8 7l1-4h6l1 4"/></svg>
+    case 'bus':
+      return <svg {...props}><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="7" y1="4" x2="7" y2="10"/><line x1="17" y1="4" x2="17" y2="10"/><circle cx="6.5" cy="17" r="1.5"/><circle cx="17.5" cy="17" r="1.5"/></svg>
+    case 'gripVertical':
+      return <svg {...props}><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg>
     case 'plane':
       return <svg {...props}><path d="M21 16V14l-8-5V3a1 1 0 0 0-2 0v6l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L14 19v-5.5l7 2.5z"/></svg>
     case 'anchor':
