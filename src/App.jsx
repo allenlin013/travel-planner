@@ -6,13 +6,15 @@ import ItineraryTab from './tabs/ItineraryTab'
 import ExpensesTab from './tabs/ExpensesTab'
 import ChecklistTab from './tabs/ChecklistTab'
 import DocumentsTab from './tabs/DocumentsTab'
+import ShoppingTab from './tabs/ShoppingTab'
 import CurrencySheet from './components/CurrencySheet'
 
 const TABS = [
-  { icon: 'calendar',  label: '行程' },
-  { icon: 'wallet',    label: '記帳' },
-  { icon: 'list',      label: '清單' },
-  { icon: 'document',  label: '文件' },
+  { icon: 'calendar',     label: '行程' },
+  { icon: 'wallet',       label: '記帳' },
+  { icon: 'list',         label: '清單' },
+  { icon: 'shoppingCart', label: '購物' },
+  { icon: 'document',     label: '文件' },
 ]
 
 // Sakura petal SVG
@@ -130,7 +132,8 @@ function AppShell() {
         {activeTab === 0 && <ItineraryTab selectedDay={selectedDay} setSelectedDay={setSelectedDay}/>}
         {activeTab === 1 && <ExpensesTab/>}
         {activeTab === 2 && <ChecklistTab/>}
-        {activeTab === 3 && <DocumentsTab/>}
+        {activeTab === 3 && <ShoppingTab/>}
+        {activeTab === 4 && <DocumentsTab/>}
       </main>
 
       {/* ── Bottom Tab Bar ── */}
