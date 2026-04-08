@@ -1,7 +1,7 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import {
   collection, doc, onSnapshot,
-  setDoc, deleteDoc, getDoc,
+  setDoc, deleteDoc, getDoc, writeBatch,
 } from 'firebase/firestore'
 import { db, TRIP_ID } from '../firebase'
 import {
@@ -9,6 +9,7 @@ import {
   getExpenses, saveExpenses,
   getChecklist, saveChecklist,
   getDocuments, saveDocuments,
+  getShopping, saveShopping,
   getMembers, initStorage,
 } from '../utils/storage'
 
@@ -20,15 +21,20 @@ async function bootstrap() {
   const ref = doc(db, 'trips', TRIP_ID, 'config', 'tripData')
   const snap = await getDoc(ref)
   if (!snap.exists()) {
-    await setDoc(ref, getTripData())
-    await setDoc(doc(db, 'trips', TRIP_ID, 'config', 'checklist'), getChecklist())
+    const batch = writeBatch(db)
+    batch.set(ref, getTripData())
+    batch.set(doc(db, 'trips', TRIP_ID, 'config', 'checklist'), getChecklist())
+    batch.set(doc(db, 'trips', TRIP_ID, 'config', 'shopping'), { items: getShopping() })
+    await batch.commit()
+
+    // Expenses written individually (may be many)
     const localExpenses = getExpenses()
-    for (const exp of localExpenses) {
-      await setDoc(doc(db, 'trips', TRIP_ID, 'expenses', exp.id), exp)
-    }
-    const localDocs = getDocuments().filter(d => d.type === 'link')
-    for (const d of localDocs) {
-      await setDoc(doc(db, 'trips', TRIP_ID, 'documents', d.id), d)
+    if (localExpenses.length > 0) {
+      const expBatch = writeBatch(db)
+      for (const exp of localExpenses) {
+        expBatch.set(doc(db, 'trips', TRIP_ID, 'expenses', exp.id), exp)
+      }
+      await expBatch.commit()
     }
   }
 }
@@ -38,7 +44,13 @@ export function SyncProvider({ children }) {
   const [checklist, setChecklist] = useState(getChecklist)
   const [tripData,  setTripData]  = useState(getTripData)
   const [documents, setDocuments] = useState(getDocuments)
+  const [shopping,  setShopping]  = useState(getShopping)
   const [synced,    setSynced]    = useState(false)
+
+  // Debounce timers for large documents (avoid Firestore write per keystroke)
+  const tripDataTimer   = useRef(null)
+  const checklistTimer  = useRef(null)
+  const shoppingTimer   = useRef(null)
 
   useEffect(() => {
     initStorage()
@@ -46,50 +58,60 @@ export function SyncProvider({ children }) {
 
     const unsubs = []
 
-    // ── Expenses ──────────────────────────────────────────
+    // ── Expenses ─────────────────────────────────────────
     unsubs.push(onSnapshot(
       collection(db, 'trips', TRIP_ID, 'expenses'),
       snap => {
         const data = snap.docs.map(d => ({ ...d.data(), id: d.id }))
         data.sort((a, b) => (a.date || '').localeCompare(b.date || ''))
-        setExpenses(data)
-        saveExpenses(data)
-        setSynced(true)
+        setExpenses(data); saveExpenses(data); setSynced(true)
       },
       err => console.error('expenses:', err)
     ))
 
-    // ── Checklist ─────────────────────────────────────────
+    // ── Checklist ────────────────────────────────────────
     unsubs.push(onSnapshot(
       doc(db, 'trips', TRIP_ID, 'config', 'checklist'),
-      snap => {
-        if (snap.exists()) { setChecklist(snap.data()); saveChecklist(snap.data()) }
-      }
+      snap => { if (snap.exists()) { setChecklist(snap.data()); saveChecklist(snap.data()) } }
     ))
 
-    // ── Trip data (stops + descriptions) ──────────────────
+    // ── Trip data ────────────────────────────────────────
     unsubs.push(onSnapshot(
       doc(db, 'trips', TRIP_ID, 'config', 'tripData'),
+      snap => { if (snap.exists()) { setTripData(snap.data()); saveTripData(snap.data()) } }
+    ))
+
+    // ── Shopping list ────────────────────────────────────
+    unsubs.push(onSnapshot(
+      doc(db, 'trips', TRIP_ID, 'config', 'shopping'),
       snap => {
-        if (snap.exists()) { setTripData(snap.data()); saveTripData(snap.data()) }
+        if (snap.exists()) {
+          const items = snap.data().items || []
+          setShopping(items); saveShopping(items)
+        }
       }
     ))
 
-    // ── Documents ─────────────────────────────────────────
+    // ── Documents ────────────────────────────────────────
     unsubs.push(onSnapshot(
       collection(db, 'trips', TRIP_ID, 'documents'),
       snap => {
-        const remote = snap.docs.map(d => ({ ...d.data(), id: d.id }))
-        // Merge with local base64 images (too large for Firestore)
+        const remote     = snap.docs.map(d => ({ ...d.data(), id: d.id }))
         const localImages = getDocuments().filter(d => d.type === 'image')
         setDocuments([...remote, ...localImages])
       }
     ))
 
-    return () => unsubs.forEach(u => u())
+    return () => {
+      unsubs.forEach(u => u())
+      // Flush any pending debounced writes before unmount
+      if (tripDataTimer.current)  clearTimeout(tripDataTimer.current)
+      if (checklistTimer.current) clearTimeout(checklistTimer.current)
+      if (shoppingTimer.current)  clearTimeout(shoppingTimer.current)
+    }
   }, [])
 
-  // ── Write helpers ────────────────────────────────────────
+  // ── Write helpers ────────────────────────────────────
   const addExpense = useCallback(async (exp) => {
     setExpenses(prev => { const u = [...prev, exp]; saveExpenses(u); return u })
     try { await setDoc(doc(db, 'trips', TRIP_ID, 'expenses', exp.id), exp) }
@@ -108,25 +130,33 @@ export function SyncProvider({ children }) {
     catch (e) { console.error(e) }
   }, [])
 
-  const updateTripData = useCallback(async (updated) => {
+  // Debounced: update locally immediately, Firestore after 1.5s idle
+  const updateTripData = useCallback((updated) => {
     setTripData(updated); saveTripData(updated)
-    try { await setDoc(doc(db, 'trips', TRIP_ID, 'config', 'tripData'), updated) }
-    catch (e) { console.error(e) }
+    if (tripDataTimer.current) clearTimeout(tripDataTimer.current)
+    tripDataTimer.current = setTimeout(async () => {
+      try { await setDoc(doc(db, 'trips', TRIP_ID, 'config', 'tripData'), updated) }
+      catch (e) { console.error('tripData write:', e) }
+    }, 1500)
   }, [])
 
-  const updateChecklist = useCallback(async (updated) => {
+  const updateChecklist = useCallback((updated) => {
     setChecklist(updated); saveChecklist(updated)
-    try { await setDoc(doc(db, 'trips', TRIP_ID, 'config', 'checklist'), updated) }
-    catch (e) { console.error(e) }
+    if (checklistTimer.current) clearTimeout(checklistTimer.current)
+    checklistTimer.current = setTimeout(async () => {
+      try { await setDoc(doc(db, 'trips', TRIP_ID, 'config', 'checklist'), updated) }
+      catch (e) { console.error('checklist write:', e) }
+    }, 1500)
   }, [])
 
   const addDocument = useCallback(async (docItem) => {
     setDocuments(prev => [docItem, ...prev])
-    if (docItem.type === 'link') {
+    // 'link' and 'drive' types are small metadata → sync via Firestore
+    // 'image' type is base64 binary → local only
+    if (docItem.type === 'link' || docItem.type === 'drive') {
       try { await setDoc(doc(db, 'trips', TRIP_ID, 'documents', docItem.id), docItem) }
       catch (e) { console.error(e) }
     } else {
-      // base64 — local only
       const local = getDocuments()
       saveDocuments([docItem, ...local])
     }
@@ -139,13 +169,43 @@ export function SyncProvider({ children }) {
     try { await deleteDoc(doc(db, 'trips', TRIP_ID, 'documents', id)) } catch (_) {}
   }, [])
 
+  // ── Shopping list (stored as one Firestore doc: {items:[...]}) ──
+  const _writeShopping = useCallback((items) => {
+    if (shoppingTimer.current) clearTimeout(shoppingTimer.current)
+    shoppingTimer.current = setTimeout(async () => {
+      try { await setDoc(doc(db, 'trips', TRIP_ID, 'config', 'shopping'), { items }) }
+      catch (e) { console.error('shopping write:', e) }
+    }, 1500)
+  }, [])
+
+  const addShoppingItem = useCallback((item) => {
+    setShopping(prev => {
+      const next = [item, ...prev]; saveShopping(next); _writeShopping(next); return next
+    })
+  }, [_writeShopping])
+
+  const updateShoppingItem = useCallback((item) => {
+    setShopping(prev => {
+      const next = prev.map(s => s.id === item.id ? item : s)
+      saveShopping(next); _writeShopping(next); return next
+    })
+  }, [_writeShopping])
+
+  const deleteShoppingItem = useCallback((id) => {
+    setShopping(prev => {
+      const next = prev.filter(s => s.id !== id)
+      saveShopping(next); _writeShopping(next); return next
+    })
+  }, [_writeShopping])
+
   return (
     <SyncContext.Provider value={{
-      expenses, checklist, tripData, documents, synced,
+      expenses, checklist, tripData, documents, shopping, synced,
       members: tripData?.members || getMembers(),
       addExpense, updateExpense, deleteExpense,
       updateTripData, updateChecklist,
       addDocument, deleteDocument,
+      addShoppingItem, updateShoppingItem, deleteShoppingItem,
     }}>
       {children}
     </SyncContext.Provider>
