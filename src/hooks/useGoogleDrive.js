@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
 
 const CLIENT_ID   = '435449181496-40sfep6p6e655kh9kue2s4v3v2nveksg.apps.googleusercontent.com'
-const SCOPE       = 'https://www.googleapis.com/auth/drive.file'
+const SCOPE       = 'https://www.googleapis.com/auth/drive.file email profile'
 const FOLDER_NAME = 'TravelPlanner2026'
 const USER_KEY    = 'gdrive_user'
 const FOLDER_KEY  = 'gdrive_folder'
