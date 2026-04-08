@@ -5,8 +5,100 @@ import { useExchangeRate } from '../hooks/useExchangeRate'
 import BottomSheet from '../components/BottomSheet'
 import Icon from '../components/Icon'
 
-const CATEGORIES = ['餐廳','交通','購物','住宿','門票','其他']
-const CAT_ICON   = { '餐廳':'utensils','交通':'train','購物':'shoppingBag','住宿':'home','門票':'document','其他':'receipt' }
+const CATEGORIES   = ['餐廳','交通','購物','住宿','門票','其他']
+const CAT_ICON     = { '餐廳':'utensils','交通':'train','購物':'shoppingBag','住宿':'home','門票':'document','其他':'receipt' }
+const DONUT_COLORS = ['#D4849A','#7AA8B8','#9BA88A','#C4956A','#A88BA8','#88A8C4']
+
+// ── SVG donut helpers ─────────────────────────────────────────
+function polarToCart(cx, cy, r, angleDeg) {
+  const rad = (angleDeg - 90) * Math.PI / 180
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) }
+}
+function segmentPath(cx, cy, outerR, innerR, startDeg, endDeg) {
+  const largeArc = endDeg - startDeg > 180 ? 1 : 0
+  const s  = polarToCart(cx, cy, outerR, startDeg)
+  const e  = polarToCart(cx, cy, outerR, endDeg)
+  const si = polarToCart(cx, cy, innerR, endDeg)
+  const ei = polarToCart(cx, cy, innerR, startDeg)
+  return [
+    `M ${s.x.toFixed(3)} ${s.y.toFixed(3)}`,
+    `A ${outerR} ${outerR} 0 ${largeArc} 1 ${e.x.toFixed(3)} ${e.y.toFixed(3)}`,
+    `L ${si.x.toFixed(3)} ${si.y.toFixed(3)}`,
+    `A ${innerR} ${innerR} 0 ${largeArc} 0 ${ei.x.toFixed(3)} ${ei.y.toFixed(3)}`,
+    'Z',
+  ].join(' ')
+}
+
+// ── Per-person Spending Donut ─────────────────────────────────
+function SpendingDonut({ expenses, members, jpyToTwd, displayCurrency }) {
+  const SIZE = 160, cx = 80, cy = 80, outerR = 62, innerR = 40
+
+  const perMember = members.map((m, i) => ({
+    name:  m,
+    jpy:   expenses.filter(e => e.paidBy === m).reduce((s, e) => s + (Number(e.amount) || 0), 0),
+    color: DONUT_COLORS[i % DONUT_COLORS.length],
+  })).filter(m => m.jpy > 0)
+
+  const total = perMember.reduce((s, m) => s + m.jpy, 0)
+  if (total === 0 || perMember.length === 0) return null
+
+  let angle = -90
+  const segments = perMember.map(m => {
+    const sweep = (m.jpy / total) * 360
+    const start = angle + (perMember.length > 1 ? 1 : 0)
+    angle += sweep
+    const end = angle - (perMember.length > 1 ? 1 : 0)
+    return { ...m, sweep, start, end }
+  })
+
+  const fmt = (jpy) => displayCurrency === 'TWD'
+    ? `NT$${jpyToTwd(jpy).toLocaleString()}`
+    : `¥${jpy.toLocaleString()}`
+  const totalFmt = displayCurrency === 'TWD'
+    ? `NT$${jpyToTwd(total).toLocaleString()}`
+    : total >= 10000 ? `¥${(total/1000).toFixed(1)}k` : `¥${total.toLocaleString()}`
+
+  return (
+    <div style={{ margin:'0 16px 14px', padding:'16px', background:'white', borderRadius:16, border:'1px solid rgba(212,132,154,0.15)', boxShadow:'0 2px 16px rgba(212,132,154,0.08)' }}>
+      <div style={{ fontSize:11, fontWeight:700, color:'var(--ink-mid)', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:14 }}>
+        個人消費
+      </div>
+      <div style={{ display:'flex', alignItems:'center', gap:18 }}>
+        {/* SVG Donut */}
+        <svg width={SIZE} height={SIZE} style={{ flexShrink:0 }}>
+          {segments.length === 1 ? (
+            <g>
+              <circle cx={cx} cy={cy} r={outerR} fill={segments[0].color}/>
+              <circle cx={cx} cy={cy} r={innerR} fill="white"/>
+            </g>
+          ) : (
+            segments.map(seg => (
+              <path key={seg.name} d={segmentPath(cx, cy, outerR, innerR, seg.start, seg.end)} fill={seg.color}/>
+            ))
+          )}
+          {/* Center total */}
+          <text x={cx} y={cy - 5} textAnchor="middle" style={{ fontSize:10, fill:'var(--ink-soft)', fontFamily:'Noto Sans TC,sans-serif' }}>合計</text>
+          <text x={cx} y={cy + 11} textAnchor="middle" style={{ fontSize:13, fontWeight:'bold', fill:'var(--ink)', fontFamily:'Cormorant Garant,serif' }}>{totalFmt}</text>
+        </svg>
+
+        {/* Legend */}
+        <div style={{ flex:1, display:'flex', flexDirection:'column', gap:10 }}>
+          {segments.map(seg => (
+            <div key={seg.name} style={{ display:'flex', alignItems:'flex-start', gap:8 }}>
+              <div style={{ width:10, height:10, borderRadius:'50%', background:seg.color, flexShrink:0, marginTop:3 }}/>
+              <div>
+                <div style={{ fontSize:13, fontWeight:600, color:'var(--ink)', lineHeight:1.2 }}>{seg.name}</div>
+                <div style={{ fontSize:11, color:'var(--ink-soft)' }}>
+                  {fmt(seg.jpy)} · {((seg.jpy / total) * 100).toFixed(0)}%
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function MemberPill({ name, selected, onToggle, activeColor }) {
   return (
@@ -293,6 +385,9 @@ export default function ExpensesTab() {
           <Icon name="receipt" size={15} color="var(--rose)"/> 結帳結算
         </button>
       </div>
+
+      {/* Per-person spending donut */}
+      <SpendingDonut expenses={expenses} members={members} jpyToTwd={jpyToTwd} displayCurrency={displayCurrency}/>
 
       {/* Expense list */}
       <div style={{ padding:'0 16px' }}>
