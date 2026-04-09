@@ -214,8 +214,10 @@ function WalkHint({ mins, onAddTransit }) {
 }
 
 // ── Transit Segment Row ───────────────────────────────────────
-function TransitSegmentRow({ stop, onTypeChange, onDelete, onUpdateDuration }) {
-  const [editingDur, setEditingDur] = useState(false)
+function TransitSegmentRow({ stop, onTypeChange, onDelete, onUpdateDuration, onUpdateName }) {
+  const [editingDur,  setEditingDur]  = useState(false)
+  const [editingName, setEditingName] = useState(false)
+  const [nameVal,     setNameVal]     = useState(stop.name || '')
   const parsed = stop.duration?.match(/(\d+)h(\d+)m/)
   const [hrs,  setHrs]  = useState(parsed ? parseInt(parsed[1]) : 0)
   const [mins, setMins] = useState(parsed ? parseInt(parsed[2]) : 0)
@@ -223,6 +225,10 @@ function TransitSegmentRow({ stop, onTypeChange, onDelete, onUpdateDuration }) {
   const saveDur = () => {
     onUpdateDuration(stop.id, `${hrs}h${String(mins).padStart(2,'0')}m`)
     setEditingDur(false)
+  }
+  const saveName = () => {
+    onUpdateName(stop.id, nameVal.trim() || TYPE_LABEL[stop.type])
+    setEditingName(false)
   }
 
   return (
@@ -253,6 +259,35 @@ function TransitSegmentRow({ stop, onTypeChange, onDelete, onUpdateDuration }) {
           </button>
         )}
       </div>
+
+      {/* Name / location */}
+      <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:5 }}>
+        <Icon name="mapPin" size={12} color="var(--ink-faint)" strokeWidth={1.5}/>
+        {editingName ? (
+          <>
+            <input
+              autoFocus
+              value={nameVal}
+              onChange={e => setNameVal(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') saveName() }}
+              placeholder="例：大阪車站轉乘、搭車"
+              style={{ flex:1, padding:'2px 6px', fontSize:12, border:'1px solid rgba(212,132,154,0.4)', borderRadius:6 }}/>
+            <button type="button" onClick={saveName}
+              style={{ padding:'2px 8px', borderRadius:8, fontSize:11, fontWeight:700, background:'var(--rose)', color:'white', border:'none', cursor:'pointer', flexShrink:0 }}>
+              確認
+            </button>
+          </>
+        ) : (
+          <>
+            <span style={{ fontSize:11, color:'var(--ink)', flex:1 }}>{stop.name || '（未命名）'}</span>
+            <button type="button" onClick={() => { setNameVal(stop.name || ''); setEditingName(true) }}
+              style={{ background:'none', border:'none', cursor:'pointer', padding:2, display:'flex', alignItems:'center' }}>
+              <Icon name="pencil" size={11} color="rgba(212,132,154,0.6)"/>
+            </button>
+          </>
+        )}
+      </div>
+
       {/* Duration */}
       <div style={{ display:'flex', alignItems:'center', gap:6 }}>
         <Icon name="clock" size={12} color="var(--ink-faint)" strokeWidth={1.5}/>
@@ -286,7 +321,7 @@ function TransitSegmentRow({ stop, onTypeChange, onDelete, onUpdateDuration }) {
 }
 
 // ── Transit Connector (view mode) ─────────────────────────────
-function TransitConnector({ stops, onTypeChange, onDeleteTransit, onAddTransit, onUpdateDuration }) {
+function TransitConnector({ stops, onTypeChange, onDeleteTransit, onAddTransit, onUpdateDuration, onUpdateName }) {
   const [expanded, setExpanded] = useState(false)
   const totalMins   = stops.reduce((s, st) => s + parseMins(st.duration), 0)
   const primaryType = stops[0]?.type || 'train'
@@ -312,6 +347,7 @@ function TransitConnector({ stops, onTypeChange, onDeleteTransit, onAddTransit, 
                 onTypeChange={onTypeChange}
                 onDelete={onDeleteTransit ? () => onDeleteTransit(st.id) : null}
                 onUpdateDuration={onUpdateDuration}
+                onUpdateName={onUpdateName}
               />
             </div>
           ))}
@@ -884,6 +920,11 @@ export default function ItineraryTab({ selectedDay, setSelectedDay }) {
     patchDay(currentDay.stops.map(s => s.id === id ? { ...s, duration: newDuration } : s))
   }, [currentDay, patchDay])
 
+  const updateTransitName = useCallback((id, newName) => {
+    if (!currentDay) return
+    patchDay(currentDay.stops.map(s => s.id === id ? { ...s, name: newName } : s))
+  }, [currentDay, patchDay])
+
   const handleDragEnd = useCallback(({ active, over }) => {
     if (!over || active.id === over.id || !currentDay) return
     const stops  = currentDay.stops
@@ -984,7 +1025,8 @@ export default function ItineraryTab({ selectedDay, setSelectedDay }) {
                 onTypeChange={changeTransitType}
                 onDeleteTransit={deleteStop}
                 onAddTransit={insertTransit}
-                onUpdateDuration={updateTransitDuration}/>
+                onUpdateDuration={updateTransitDuration}
+                onUpdateName={updateTransitName}/>
             if (seg.kind === 'walkHint')
               return <WalkHint key={`w-${i}`} mins={seg.mins}
                 onAddTransit={() => insertTransit(seg.afterStopId)}/>
