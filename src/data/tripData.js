@@ -1,5 +1,5 @@
 export const TRIP_DATA = {
-  version: 4,
+  version: 5,
   tripName: "Osaka Kyoto Nara 8天7夜美食旅程",
   startDate: "2026-04-11",
   endDate: "2026-04-18",
