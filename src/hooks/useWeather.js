@@ -1,22 +1,19 @@
-// Hardcoded weather forecast from 附件6_天氣預報
-// Data: 04/11–04/18 Osaka/Kyoto area, all 晴 (sunny)
-
+// Hardcoded weather forecast
 const FORECAST = [
-  { date: '2026-04-11', icon: 'sun', label: '晴', max: 23, min: 16, precip: 10 },
-  { date: '2026-04-12', icon: 'sun', label: '晴', max: 24, min: 11, precip: 30 },
-  { date: '2026-04-13', icon: 'sun', label: '晴', max: 23, min: 16, precip: 40 },
-  { date: '2026-04-14', icon: 'sun', label: '晴', max: 23, min: 16, precip: 40 },
-  { date: '2026-04-15', icon: 'sun', label: '晴', max: 23, min: 16, precip: 30 },
-  { date: '2026-04-16', icon: 'sun', label: '晴', max: 23, min: 16, precip: 60 },
-  { date: '2026-04-17', icon: 'sun', label: '晴', max: 23, min: 16, precip: 90 },
-  { date: '2026-04-18', icon: 'sun', label: '晴', max: 23, min: 16, precip: 90 },
+  { date: '2026-04-11', icon: 'sun',       label: '晴',      max: 23, min: 15, precip:  0 },
+  { date: '2026-04-12', icon: 'cloud',     label: '晴轉陰',  max: 23, min: 11, precip: 20 },
+  { date: '2026-04-13', icon: 'cloud',     label: '多雲',    max: 20, min: 14, precip: 40 },
+  { date: '2026-04-14', icon: 'cloud',     label: '多雲',    max: 21, min: 15, precip: 40 },
+  { date: '2026-04-15', icon: 'cloud',     label: '多雲放晴', max: 21, min: 14, precip: 30 },
+  { date: '2026-04-16', icon: 'sun',       label: '晴',      max: 25, min: 12, precip: 10 },
+  { date: '2026-04-17', icon: 'cloud',     label: '多雲間晴', max: 22, min: 14, precip: 40 },
+  { date: '2026-04-18', icon: 'cloudRain', label: '晴間多雨', max: 23, min: 15, precip: 70 },
 ]
 
 /** Synthetic hourly data based on daily max/min/precip */
 function buildHourly(max, min, dailyPrecip) {
   const hours = []
   for (let h = 0; h < 24; h++) {
-    // Temperature: min at 6am, max at 14pm, returns toward min by midnight
     let temp
     if (h <= 6) {
       temp = min + Math.round((max - min) * 0.1 * (h / 6))
@@ -27,14 +24,12 @@ function buildHourly(max, min, dailyPrecip) {
     }
     const apparent = temp - 2
 
-    // Precipitation: peaks in afternoon for rainier days
     let precipProb
     if (dailyPrecip <= 30) {
       precipProb = Math.round(dailyPrecip * 0.3)
     } else if (dailyPrecip <= 60) {
       precipProb = (h >= 12 && h <= 18) ? dailyPrecip : Math.round(dailyPrecip * 0.25)
     } else {
-      // 90% days: high all afternoon/evening
       precipProb = (h >= 10 && h <= 21) ? dailyPrecip : Math.round(dailyPrecip * 0.4)
     }
 
@@ -46,8 +41,8 @@ function buildHourly(max, min, dailyPrecip) {
   return hours
 }
 
-const FORECAST_MAP  = Object.fromEntries(FORECAST.map(d => [d.date, d]))
-const HOURLY_MAP    = Object.fromEntries(
+const FORECAST_MAP = Object.fromEntries(FORECAST.map(d => [d.date, d]))
+const HOURLY_MAP   = Object.fromEntries(
   FORECAST.map(d => [d.date, buildHourly(d.max, d.min, d.precip)])
 )
 
