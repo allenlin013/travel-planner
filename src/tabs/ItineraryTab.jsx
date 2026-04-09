@@ -832,7 +832,7 @@ export default function ItineraryTab({ selectedDay, setSelectedDay }) {
               <span style={{ fontSize:12, color:'var(--teal)', fontWeight:500 }}>
                 {dayWeather.min}° ~ {dayWeather.max}°C · {dayWeather.label}
               </span>
-              {isTypical && <span style={{ fontSize:10, color:'var(--ink-faint)', fontStyle:'italic' }}>往年參考</span>}
+              <span style={{ fontSize:10, color:'var(--ink-faint)', fontStyle:'italic' }}>參考 tenki.jp</span>
             </div>
           )}
         </div>
