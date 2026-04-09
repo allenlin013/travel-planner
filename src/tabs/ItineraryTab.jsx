@@ -17,7 +17,7 @@ import BottomSheet from '../components/BottomSheet'
 import Icon from '../components/Icon'
 
 // ── Constants ─────────────────────────────────────────────────
-const CONNECTOR_TYPES = new Set(['train', 'walk', 'taxi', 'bus'])
+const CONNECTOR_TYPES = new Set(['train', 'walk', 'taxi', 'bus', 'flight'])
 const TRANSIT_TYPES   = ['walk', 'train', 'bus', 'taxi']
 
 const STOP_ICON = {
@@ -234,6 +234,14 @@ function TransitConnector({ stops, onTypeChange }) {
                 </div>
                 <span style={{ fontSize:11, color:'var(--rose)', fontFamily:'Cormorant Garant,serif', fontWeight:700 }}>{st.time}</span>
               </div>
+              {/* Flight details inline */}
+              {st.type === 'flight' && st.flightNo && (
+                <div style={{ background:'rgba(41,128,185,0.06)', borderRadius:8, padding:'7px 10px', marginBottom:8, fontSize:11, color:'var(--ink-soft)', lineHeight:1.7 }}>
+                  <div><span style={{ fontWeight:700, color:'var(--ink)' }}>班機：</span>{st.flightNo}</div>
+                  <div><span style={{ fontWeight:700, color:'var(--ink)' }}>出發：</span>{st.fromAirport}</div>
+                  <div><span style={{ fontWeight:700, color:'var(--ink)' }}>抵達：</span>{st.toAirport}</div>
+                </div>
+              )}
               {/* Type selector — visible directly, no need for edit mode */}
               {onTypeChange && (
                 <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
