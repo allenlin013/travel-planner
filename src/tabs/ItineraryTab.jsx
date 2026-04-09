@@ -17,7 +17,7 @@ import BottomSheet from '../components/BottomSheet'
 import Icon from '../components/Icon'
 
 // ── Constants ─────────────────────────────────────────────────
-const CONNECTOR_TYPES = new Set(['train', 'walk', 'taxi', 'bus', 'flight'])
+const CONNECTOR_TYPES = new Set(['train', 'walk', 'taxi', 'bus'])
 const TRANSIT_TYPES   = ['walk', 'train', 'bus', 'taxi']
 
 const STOP_ICON = {
@@ -77,6 +77,8 @@ function buildSegments(stops) {
     out.push(raw[i])
     if (i < raw.length - 1 && raw[i].kind === 'activity' && raw[i+1].kind === 'activity') {
       const curr = raw[i].stop, next = raw[i+1].stop
+      // Don't insert walkHint between two flight stops (airports)
+      if (curr.type === 'flight' && next.type === 'flight') continue
       const walkMins = timeToMins(next.time) - (timeToMins(curr.time) + parseMins(curr.duration))
       if (walkMins > 0 && walkMins <= 90) out.push({ kind: 'walkHint', mins: walkMins })
     }
