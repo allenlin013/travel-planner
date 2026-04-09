@@ -12,29 +12,38 @@ import {
   getShopping, saveShopping,
   getMembers, initStorage,
 } from '../utils/storage'
+import { TRIP_DATA } from '../data/tripData'
 
 const SyncContext = createContext(null)
 export const useSync = () => useContext(SyncContext)
 
-// Write initial data to Firestore if this is the first time
+// Write / update Firestore with canonical trip data.
+// Re-writes tripData if the version in Firestore is behind the local version.
 async function bootstrap() {
-  const ref = doc(db, 'trips', TRIP_ID, 'config', 'tripData')
+  const ref  = doc(db, 'trips', TRIP_ID, 'config', 'tripData')
   const snap = await getDoc(ref)
-  if (!snap.exists()) {
+
+  const remoteVersion = snap.exists() ? (snap.data().version ?? 0) : 0
+  const localVersion  = TRIP_DATA.version ?? 0
+
+  if (!snap.exists() || remoteVersion < localVersion) {
     const batch = writeBatch(db)
-    batch.set(ref, getTripData())
-    batch.set(doc(db, 'trips', TRIP_ID, 'config', 'checklist'), getChecklist())
-    batch.set(doc(db, 'trips', TRIP_ID, 'config', 'shopping'), { items: getShopping() })
+    batch.set(ref, TRIP_DATA)
+    if (!snap.exists()) {
+      batch.set(doc(db, 'trips', TRIP_ID, 'config', 'checklist'), getChecklist())
+      batch.set(doc(db, 'trips', TRIP_ID, 'config', 'shopping'), { items: getShopping() })
+    }
     await batch.commit()
 
-    // Expenses written individually (may be many)
-    const localExpenses = getExpenses()
-    if (localExpenses.length > 0) {
-      const expBatch = writeBatch(db)
-      for (const exp of localExpenses) {
-        expBatch.set(doc(db, 'trips', TRIP_ID, 'expenses', exp.id), exp)
+    if (!snap.exists()) {
+      const localExpenses = getExpenses()
+      if (localExpenses.length > 0) {
+        const expBatch = writeBatch(db)
+        for (const exp of localExpenses) {
+          expBatch.set(doc(db, 'trips', TRIP_ID, 'expenses', exp.id), exp)
+        }
+        await expBatch.commit()
       }
-      await expBatch.commit()
     }
   }
 }

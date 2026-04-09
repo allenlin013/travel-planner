@@ -115,80 +115,6 @@ function DaySelector({ days, selectedDay, setSelectedDay }) {
 }
 
 // ── Hourly Weather Strip (tenki.jp style) ────────────────────
-function HourlyWeatherStrip({ hours, isTypical }) {
-  if (!hours || hours.length === 0) return null
-  // Show 6am–22pm
-  const visible = hours.filter(h => h.hour >= 6 && h.hour <= 22)
-  if (visible.length === 0) return null
-
-  const precipBar = (pct) => ({
-    height: Math.max(3, Math.round(pct * 0.32)),
-    background: pct >= 70 ? 'rgba(55,120,200,0.85)'
-              : pct >= 40 ? 'rgba(90,155,210,0.75)'
-              : pct >= 20 ? 'rgba(122,168,184,0.55)'
-              : 'rgba(180,215,225,0.3)',
-  })
-
-  return (
-    <div style={{ margin:'0 16px 10px', borderRadius:14, overflow:'hidden', border:'1px solid rgba(122,168,184,0.2)', background:'linear-gradient(180deg,#EEF5FA,#E8F2FA)' }}>
-      <div style={{ padding:'8px 14px 4px', display:'flex', alignItems:'center', gap:6, borderBottom:'1px solid rgba(122,168,184,0.12)' }}>
-        <Icon name="cloud" size={13} color="var(--teal)" strokeWidth={1.5}/>
-        <span style={{ fontSize:11, fontWeight:700, color:'var(--teal)', letterSpacing:'0.06em', textTransform:'uppercase' }}>
-          逐時天氣
-        </span>
-        {isTypical && <span style={{ fontSize:10, color:'var(--ink-faint)', fontStyle:'italic', marginLeft:4 }}>往年參考</span>}
-      </div>
-
-      {/* Scrollable hourly columns */}
-      <div style={{ overflowX:'auto', scrollbarWidth:'none', WebkitOverflowScrolling:'touch' }}>
-        <div style={{ display:'flex', padding:'6px 10px 0', minWidth:'max-content', gap:0 }}>
-          {visible.map((h, i) => {
-            const barStyle = precipBar(h.precipProb)
-            const isNoon   = h.hour === 12
-            const sunColor = h.icon === 'sun' ? '#C4956A' : 'var(--teal)'
-            return (
-              <div key={h.hour} style={{
-                width:46, display:'flex', flexDirection:'column', alignItems:'center',
-                gap:1, padding:'4px 0 0',
-                borderLeft: i > 0 ? '1px solid rgba(122,168,184,0.1)' : 'none',
-                background: isNoon ? 'rgba(255,255,255,0.35)' : 'transparent',
-              }}>
-                {/* Hour */}
-                <span style={{ fontSize:10, color: isNoon ? 'var(--teal)' : 'var(--ink-faint)', fontWeight: isNoon ? 700 : 400 }}>
-                  {h.hour}:00
-                </span>
-                {/* Weather icon */}
-                <div style={{ margin:'3px 0 2px' }}>
-                  <Icon name={h.icon} size={17} color={sunColor} strokeWidth={1.4}/>
-                </div>
-                {/* Temperature */}
-                <span style={{ fontSize:13, fontWeight:700, color:'var(--ink)', fontFamily:'Cormorant Garant,serif' }}>
-                  {h.temp}°
-                </span>
-                {/* Apparent temp */}
-                <span style={{ fontSize:9, color:'var(--ink-faint)' }}>
-                  {h.apparent > h.temp ? '↑' : h.apparent < h.temp ? '↓' : ''}
-                  {h.apparent}°
-                </span>
-                {/* Precipitation probability */}
-                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', marginTop:4, marginBottom:6, gap:2 }}>
-                  <span style={{
-                    fontSize:9, fontWeight:600, minHeight:11,
-                    color: h.precipProb >= 40 ? 'rgba(55,120,200,0.9)' : 'rgba(122,168,184,0.7)',
-                  }}>
-                    {h.precipProb > 0 ? `${h.precipProb}%` : ''}
-                  </span>
-                  <div style={{ width:28, borderRadius:3, ...barStyle }}/>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ── Stop Type Icon Badge ───────────────────────────────────────
 function StopTypeBadge({ type }) {
   return (
@@ -821,7 +747,7 @@ export default function ItineraryTab({ selectedDay, setSelectedDay }) {
   const tripData = sync.tripData
   const expenses = sync.expenses || []
   const dates    = useMemo(() => (tripData?.days || []).map(d => d.date), [tripData])
-  const { weather, isTypical, hourlyByDate } = useWeather(dates)
+  const { weather, isTypical } = useWeather(dates)
 
   const currentDay = tripData?.days.find(d => d.day === selectedDay)
   const segments   = useMemo(() => buildSegments(currentDay?.stops || []), [currentDay])
@@ -925,14 +851,6 @@ export default function ItineraryTab({ selectedDay, setSelectedDay }) {
           </button>
         </div>
       </div>
-
-      {/* Hourly weather strip */}
-      {currentDay && (
-        <HourlyWeatherStrip
-          hours={hourlyByDate?.[currentDay.date]}
-          isTypical={isTypical}
-        />
-      )}
 
       {/* ── Edit mode ── */}
       {editMode ? (
