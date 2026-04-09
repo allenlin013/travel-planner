@@ -1,7 +1,77 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useSync } from '../context/SyncContext'
 import Icon from '../components/Icon'
 import BottomSheet from '../components/BottomSheet'
+
+// ── Image helpers (device-local, not synced to Firestore) ──────
+const IMG_KEY = (id) => `shop_img_${id}`
+
+function loadImg(id) {
+  try { return localStorage.getItem(IMG_KEY(id)) || null } catch (_) { return null }
+}
+function saveImg(id, dataUrl) {
+  try { localStorage.setItem(IMG_KEY(id), dataUrl) } catch (_) {}
+}
+function deleteImg(id) {
+  try { localStorage.removeItem(IMG_KEY(id)) } catch (_) {}
+}
+
+/** Compress image to JPEG ≤ 800px wide / tall, quality 0.75 */
+function compressImage(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const img = new Image()
+      img.onload = () => {
+        const MAX = 800
+        let { width, height } = img
+        if (width > MAX || height > MAX) {
+          if (width > height) { height = Math.round(height * MAX / width); width = MAX }
+          else                { width  = Math.round(width  * MAX / height); height = MAX }
+        }
+        const canvas = document.createElement('canvas')
+        canvas.width = width; canvas.height = height
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height)
+        resolve(canvas.toDataURL('image/jpeg', 0.75))
+      }
+      img.src = e.target.result
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
+// ── Full-screen image preview ─────────────────────────────────
+function ImagePreview({ src, onClose }) {
+  if (!src) return null
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 100,
+        background: 'rgba(0,0,0,0.88)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      <img
+        src={src}
+        alt=""
+        onClick={e => e.stopPropagation()}
+        style={{ maxWidth: '96vw', maxHeight: '88vh', borderRadius: 12, objectFit: 'contain' }}
+      />
+      <button
+        onClick={onClose}
+        style={{
+          position: 'absolute', top: 20, right: 20,
+          width: 36, height: 36, borderRadius: '50%',
+          background: 'rgba(255,255,255,0.2)', border: 'none',
+          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}
+      >
+        <Icon name="x" size={18} color="white"/>
+      </button>
+    </div>
+  )
+}
 
 const CATEGORIES = ['零食', '飲料', '伴手禮', '日用品', '電子', '其他']
 
@@ -71,59 +141,135 @@ function AddItemSheet({ isOpen, onClose, onAdd }) {
 const lbl = { display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--ink-soft)', marginBottom: 5 }
 
 // ── Shopping Item Row ─────────────────────────────────────────
-function ShoppingRow({ item, onToggle, onDelete }) {
+function ShoppingRow({ item, onToggle, onDelete, onImgChange }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [imgSrc,        setImgSrc]        = useState(() => loadImg(item.id))
+  const [previewOpen,   setPreviewOpen]   = useState(false)
+  const fileRef = useRef(null)
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const dataUrl = await compressImage(file)
+    saveImg(item.id, dataUrl)
+    setImgSrc(dataUrl)
+    onImgChange?.()
+    // reset so same file can be selected again
+    e.target.value = ''
+  }
+
+  const handleDeleteImg = (e) => {
+    e.stopPropagation()
+    deleteImg(item.id)
+    setImgSrc(null)
+  }
 
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 12,
-      padding: '12px 14px',
-      background: item.checked ? 'rgba(212,132,154,0.04)' : 'white',
-      borderRadius: 12,
-      border: `1px solid ${item.checked ? 'rgba(212,132,154,0.1)' : 'rgba(212,132,154,0.18)'}`,
-      marginBottom: 6,
-      transition: 'all 0.2s',
-    }}>
-      {/* Checkbox */}
-      <button onClick={() => onToggle(item)} style={{
-        width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
-        border: item.checked ? 'none' : '2px solid rgba(212,132,154,0.4)',
-        background: item.checked ? 'linear-gradient(135deg,var(--rose-vivid),var(--rose-dark))' : 'white',
-        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    <>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '10px 12px',
+        background: item.checked ? 'rgba(212,132,154,0.04)' : 'white',
+        borderRadius: 12,
+        border: `1px solid ${item.checked ? 'rgba(212,132,154,0.1)' : 'rgba(212,132,154,0.18)'}`,
+        marginBottom: 6,
         transition: 'all 0.2s',
       }}>
-        {item.checked && <Icon name="check" size={12} color="white" strokeWidth={2.5}/>}
-      </button>
-
-      {/* Content */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          fontSize: 14, fontWeight: 500, color: item.checked ? 'var(--ink-faint)' : 'var(--ink)',
-          textDecoration: item.checked ? 'line-through' : 'none',
-          lineHeight: 1.3,
+        {/* Checkbox */}
+        <button onClick={() => onToggle(item)} style={{
+          width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
+          border: item.checked ? 'none' : '2px solid rgba(212,132,154,0.4)',
+          background: item.checked ? 'linear-gradient(135deg,var(--rose-vivid),var(--rose-dark))' : 'white',
+          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          transition: 'all 0.2s',
         }}>
-          {item.name}
-          {item.qty && <span style={{ fontSize: 12, color: 'var(--ink-soft)', marginLeft: 6, fontWeight: 400 }}>× {item.qty}</span>}
+          {item.checked && <Icon name="check" size={12} color="white" strokeWidth={2.5}/>}
+        </button>
+
+        {/* Content */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: 14, fontWeight: 500, color: item.checked ? 'var(--ink-faint)' : 'var(--ink)',
+            textDecoration: item.checked ? 'line-through' : 'none',
+            lineHeight: 1.3,
+          }}>
+            {item.name}
+            {item.qty && <span style={{ fontSize: 12, color: 'var(--ink-soft)', marginLeft: 6, fontWeight: 400 }}>× {item.qty}</span>}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
+            {item.category && (
+              <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--rose)', background: 'var(--rose-pale)', padding: '1px 6px', borderRadius: 6 }}>
+                {item.category}
+              </span>
+            )}
+            {item.note && <span style={{ fontSize: 11, color: 'var(--ink-faint)' }}>{item.note}</span>}
+          </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-          {item.category && (
-            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--rose)', background: 'var(--rose-pale)', padding: '1px 6px', borderRadius: 6 }}>
-              {item.category}
-            </span>
-          )}
-          {item.note && <span style={{ fontSize: 11, color: 'var(--ink-faint)' }}>{item.note}</span>}
-        </div>
+
+        {/* Thumbnail or camera button */}
+        {imgSrc ? (
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <img
+              src={imgSrc}
+              alt=""
+              onClick={() => setPreviewOpen(true)}
+              style={{
+                width: 52, height: 52, borderRadius: 8, objectFit: 'cover',
+                border: '1.5px solid rgba(212,132,154,0.25)',
+                cursor: 'pointer',
+                opacity: item.checked ? 0.5 : 1,
+              }}
+            />
+            {/* Remove image × */}
+            <button
+              onClick={handleDeleteImg}
+              style={{
+                position: 'absolute', top: -6, right: -6,
+                width: 18, height: 18, borderRadius: '50%',
+                background: 'rgba(0,0,0,0.55)', border: 'none',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <Icon name="x" size={10} color="white" strokeWidth={2.5}/>
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => fileRef.current?.click()}
+            title="新增參考圖片"
+            style={{
+              width: 36, height: 36, borderRadius: 8, flexShrink: 0,
+              border: '1.5px dashed rgba(212,132,154,0.35)',
+              background: 'var(--rose-pale)', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <Icon name="camera" size={15} color="var(--rose)" strokeWidth={1.5}/>
+          </button>
+        )}
+
+        {/* Hidden file input — no capture so user can choose gallery or camera */}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={handleFileChange}
+        />
+
+        {/* Delete item */}
+        <button onClick={() => {
+          if (confirmDelete) { deleteImg(item.id); onDelete(item.id); setConfirmDelete(false) }
+          else { setConfirmDelete(true); setTimeout(() => setConfirmDelete(false), 2000) }
+        }} style={{ padding: '4px', background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+          <Icon name="trash" size={15} color={confirmDelete ? '#e05555' : 'rgba(212,132,154,0.4)'}/>
+          {confirmDelete && <span style={{ fontSize: 9, color: '#e05555', fontWeight: 700, lineHeight: 1 }}>確認</span>}
+        </button>
       </div>
 
-      {/* Delete */}
-      <button onClick={() => {
-        if (confirmDelete) { onDelete(item.id); setConfirmDelete(false) }
-        else { setConfirmDelete(true); setTimeout(() => setConfirmDelete(false), 2000) }
-      }} style={{ padding: '4px', background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-        <Icon name="trash" size={15} color={confirmDelete ? '#e05555' : 'rgba(212,132,154,0.4)'}/>
-        {confirmDelete && <span style={{ fontSize: 9, color: '#e05555', fontWeight: 700, lineHeight: 1 }}>確認</span>}
-      </button>
-    </div>
+      {/* Full-screen preview */}
+      {previewOpen && <ImagePreview src={imgSrc} onClose={() => setPreviewOpen(false)}/>}
+    </>
   )
 }
 
@@ -223,7 +369,7 @@ export default function ShoppingTab() {
               </div>
             ) : null}
             {groups[group].map(item => (
-              <ShoppingRow key={item.id} item={item} onToggle={handleToggle} onDelete={handleDelete}/>
+              <ShoppingRow key={item.id} item={item} onToggle={handleToggle} onDelete={handleDelete} onImgChange={()=>{}}/>
             ))}
           </div>
         ))}
@@ -238,7 +384,7 @@ export default function ShoppingTab() {
               已購買 · {checkedItems.length} 項
             </div>
             {checkedItems.map(item => (
-              <ShoppingRow key={item.id} item={item} onToggle={handleToggle} onDelete={handleDelete}/>
+              <ShoppingRow key={item.id} item={item} onToggle={handleToggle} onDelete={handleDelete} onImgChange={()=>{}}/>
             ))}
           </>
         )}
