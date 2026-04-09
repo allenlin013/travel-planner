@@ -278,16 +278,17 @@ function WalkHint({ mins }) {
 }
 
 // ── Transit Connector (view mode) ─────────────────────────────
-function TransitConnector({ stops }) {
+function TransitConnector({ stops, onTypeChange }) {
   const [expanded, setExpanded] = useState(false)
-  const totalMins  = stops.reduce((s, st) => s + parseMins(st.duration), 0)
+  const totalMins   = stops.reduce((s, st) => s + parseMins(st.duration), 0)
   const primaryType = stops[0]?.type || 'train'
+  const dashedLine  = { width:1.5, height:14, background:'repeating-linear-gradient(to bottom,rgba(212,132,154,0.4) 0,rgba(212,132,154,0.4) 4px,transparent 4px,transparent 8px)' }
 
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', padding:'2px 0' }}>
-      <div style={{ width:1.5, height:14, background:'repeating-linear-gradient(to bottom,rgba(212,132,154,0.4) 0,rgba(212,132,154,0.4) 4px,transparent 4px,transparent 8px)' }}/>
+      <div style={dashedLine}/>
 
-      <button onClick={() => setExpanded(v => !v)} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3, background:'none', border:'none', cursor:'pointer', padding:'4px 0' }}>
+      <button type="button" onClick={() => setExpanded(v => !v)} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3, background:'none', border:'none', cursor:'pointer', padding:'4px 0' }}>
         <div style={{ width:40, height:40, borderRadius:'50%', background:'white', border:'2px solid rgba(212,132,154,0.35)', boxShadow:'0 2px 10px rgba(212,132,154,0.15)', display:'flex', alignItems:'center', justifyContent:'center' }}>
           <Icon name={TRANSIT_ICON[primaryType] || 'train'} size={17} color="var(--rose)" strokeWidth={1.5}/>
         </div>
@@ -295,21 +296,48 @@ function TransitConnector({ stops }) {
       </button>
 
       {expanded && (
-        <div style={{ width:'80%', background:'white', border:'1px solid rgba(212,132,154,0.2)', borderRadius:12, padding:'10px 14px', boxShadow:'0 4px 16px rgba(212,132,154,0.12)', marginBottom:4 }}>
+        <div style={{ width:'88%', background:'white', border:'1px solid rgba(212,132,154,0.2)', borderRadius:12, padding:'12px 14px', boxShadow:'0 4px 16px rgba(212,132,154,0.12)', marginBottom:4 }}>
           {stops.map((st, i) => (
-            <div key={st.id} style={{ display:'flex', alignItems:'center', gap:10, paddingBottom: i < stops.length-1 ? 8 : 0, borderBottom: i < stops.length-1 ? '1px solid rgba(212,132,154,0.1)' : 'none', marginBottom: i < stops.length-1 ? 8 : 0 }}>
-              <Icon name={TRANSIT_ICON[st.type] || 'train'} size={14} color="var(--rose-dark)"/>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:12, fontWeight:600, color:'var(--ink)' }}>{st.name}</div>
-                {parseMins(st.duration) > 0 && <div style={{ fontSize:10, color:'var(--ink-soft)' }}>{fmtDur(st.duration)}</div>}
+            <div key={st.id} style={{ paddingBottom: i < stops.length-1 ? 12 : 0, borderBottom: i < stops.length-1 ? '1px solid rgba(212,132,154,0.08)' : 'none', marginBottom: i < stops.length-1 ? 12 : 0 }}>
+              {/* Stop name + time */}
+              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+                <Icon name={TRANSIT_ICON[st.type] || 'train'} size={14} color="var(--rose-dark)"/>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, fontWeight:600, color:'var(--ink)' }}>{st.name}</div>
+                  {parseMins(st.duration) > 0 && <div style={{ fontSize:10, color:'var(--ink-soft)' }}>{fmtDur(st.duration)}</div>}
+                </div>
+                <span style={{ fontSize:11, color:'var(--rose)', fontFamily:'Cormorant Garant,serif', fontWeight:700 }}>{st.time}</span>
               </div>
-              <span style={{ fontSize:11, color:'var(--rose)', fontFamily:'Cormorant Garant,serif', fontWeight:700 }}>{st.time}</span>
+              {/* Type selector — visible directly, no need for edit mode */}
+              {onTypeChange && (
+                <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
+                  {TRANSIT_TYPES.map(t => {
+                    const active = st.type === t
+                    return (
+                      <button
+                        type="button"
+                        key={t}
+                        onClick={() => onTypeChange(st.id, t)}
+                        style={{
+                          padding:'4px 10px', borderRadius:10, fontSize:11, fontWeight:600,
+                          border: active ? 'none' : '1.5px solid rgba(212,132,154,0.3)',
+                          cursor:'pointer', transition:'all 0.15s',
+                          background: active ? 'var(--rose)' : 'white',
+                          color: active ? 'white' : 'var(--rose)',
+                        }}
+                      >
+                        {TYPE_LABEL[t]}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           ))}
         </div>
       )}
 
-      <div style={{ width:1.5, height:14, background:'repeating-linear-gradient(to bottom,rgba(212,132,154,0.4) 0,rgba(212,132,154,0.4) 4px,transparent 4px,transparent 8px)' }}/>
+      <div style={dashedLine}/>
     </div>
   )
 }
@@ -336,8 +364,14 @@ function SortableActivityCard({ stop, onDelete, expenses }) {
         <ActivityCard stop={stop} expenses={expenses} onTap={null}/>
       </div>
 
-      {/* Delete button */}
-      <button onClick={() => { if (confirmDelete) { onDelete(stop.id) } else { setConfirmDelete(true) } }} style={{ padding:'14px 4px', background:'none', border:'none', cursor:'pointer', flexShrink:0, display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
+      {/* Delete button — stopPropagation prevents dnd sensors from intercepting tap */}
+      <button
+        type="button"
+        onPointerDown={e => e.stopPropagation()}
+        onTouchStart={e => e.stopPropagation()}
+        onClick={() => { if (confirmDelete) { onDelete(stop.id) } else { setConfirmDelete(true) } }}
+        style={{ padding:'14px 4px', background:'none', border:'none', cursor:'pointer', flexShrink:0, display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}
+      >
         <Icon name="trash" size={16} color={confirmDelete ? '#e05555' : 'rgba(212,132,154,0.5)'}/>
         {confirmDelete && <span style={{ fontSize:9, color:'#e05555', fontWeight:700, lineHeight:1 }}>確認</span>}
       </button>
@@ -350,30 +384,58 @@ function SortableTransitItem({ stop, onTypeChange, onDelete }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stop.id })
 
   return (
-    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1, display:'flex', alignItems:'center', gap:6, padding:'6px 0', marginBottom:4 }}>
-      <button {...attributes} {...listeners} style={{ padding:'4px', touchAction:'none', background:'none', border:'none', cursor:'grab', flexShrink:0 }}>
-        <Icon name="gripVertical" size={14} color="var(--ink-faint)" strokeWidth={2}/>
-      </button>
+    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1, marginBottom:8 }}>
+      <div style={{
+        background:'white', borderRadius:12, padding:'10px 12px',
+        border:'1px solid rgba(212,132,154,0.2)',
+        boxShadow:'0 1px 8px rgba(212,132,154,0.08)',
+        display:'flex', alignItems:'center', gap:8,
+      }}>
+        {/* Drag handle — only element with dnd listeners */}
+        <button type="button" {...attributes} {...listeners} style={{ padding:'8px 4px', touchAction:'none', background:'none', border:'none', cursor:'grab', flexShrink:0, display:'flex', alignItems:'center' }}>
+          <Icon name="gripVertical" size={16} color="var(--ink-faint)" strokeWidth={2}/>
+        </button>
 
-      <div style={{ width:28, height:28, borderRadius:'50%', background:'white', border:'1.5px solid rgba(212,132,154,0.3)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-        <Icon name={TRANSIT_ICON[stop.type] || 'train'} size={13} color="var(--rose)"/>
+        <div style={{ flex:1 }}>
+          {/* Stop name */}
+          <div style={{ fontSize:12, color:'var(--ink-soft)', marginBottom:7 }}>{stop.name}</div>
+          {/* Type selector pills — stopPropagation prevents dnd sensors from grabbing these taps */}
+          <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
+            {TRANSIT_TYPES.map(t => {
+              const active = stop.type === t
+              return (
+                <button
+                  type="button"
+                  key={t}
+                  onPointerDown={e => e.stopPropagation()}
+                  onTouchStart={e => e.stopPropagation()}
+                  onClick={() => onTypeChange(stop.id, t)}
+                  style={{
+                    padding:'5px 12px', borderRadius:10, fontSize:12, fontWeight:600,
+                    border: active ? 'none' : '1.5px solid rgba(212,132,154,0.3)',
+                    cursor:'pointer', transition:'all 0.15s',
+                    background: active ? 'var(--rose)' : 'white',
+                    color: active ? 'white' : 'var(--rose)',
+                    boxShadow: active ? '0 2px 8px rgba(212,132,154,0.3)' : 'none',
+                  }}
+                >
+                  {TYPE_LABEL[t]}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Delete */}
+        <button
+          type="button"
+          onPointerDown={e => e.stopPropagation()}
+          onClick={() => onDelete(stop.id)}
+          style={{ padding:'8px 4px', background:'none', border:'none', cursor:'pointer', flexShrink:0 }}
+        >
+          <Icon name="trash" size={15} color="rgba(212,132,154,0.5)"/>
+        </button>
       </div>
-
-      <div style={{ flex:1, display:'flex', alignItems:'center', gap:5, flexWrap:'wrap' }}>
-        {TRANSIT_TYPES.map(t => (
-          <button key={t} onClick={() => onTypeChange(stop.id, t)} style={{
-            padding:'3px 9px', borderRadius:10, fontSize:11, fontWeight:600,
-            border:'none', cursor:'pointer',
-            background: stop.type === t ? 'var(--rose)' : 'var(--rose-pale)',
-            color: stop.type === t ? 'white' : 'var(--rose)',
-          }}>{TYPE_LABEL[t]}</button>
-        ))}
-        <span style={{ fontSize:11, color:'var(--ink-soft)' }}>{stop.name}</span>
-      </div>
-
-      <button onClick={() => onDelete(stop.id)} style={{ padding:'4px', background:'none', border:'none', cursor:'pointer', flexShrink:0 }}>
-        <Icon name="trash" size={14} color="rgba(212,132,154,0.5)"/>
-      </button>
     </div>
   )
 }
@@ -535,16 +597,11 @@ function StopDetailSheet({ stop, isOpen, onClose, sync }) {
     setExpSaving(false)
   }
 
+  // window.open inside geolocation callback is blocked by browsers (not a direct user gesture).
+  // Let Google Maps itself ask for current location — simpler and works everywhere.
   const openGeo = () => {
     const dest = encodeURIComponent(stop.name + ' Japan')
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        pos => window.open(`https://www.google.com/maps/dir/?api=1&origin=${pos.coords.latitude},${pos.coords.longitude}&destination=${dest}&travelmode=transit`, '_blank'),
-        ()  => window.open(`https://www.google.com/maps/search/?api=1&query=${dest}`, '_blank')
-      )
-    } else {
-      window.open(`https://www.google.com/maps/search/?api=1&query=${dest}`, '_blank')
-    }
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=transit`, '_blank')
   }
 
   if (!stop) return null
@@ -852,13 +909,19 @@ export default function ItineraryTab({ selectedDay, setSelectedDay }) {
             {activityCount} 站
           </div>
           <button onClick={() => setEditMode(v => !v)} style={{
-            padding:'5px 12px', borderRadius:10, border:'none', cursor:'pointer',
-            fontSize:12, fontWeight:600, display:'flex', alignItems:'center', gap:5,
-            background: editMode ? 'var(--rose)' : 'rgba(212,132,154,0.12)',
+            padding:'7px 14px', borderRadius:20, border:'none', cursor:'pointer',
+            fontSize:13, fontWeight:700, display:'flex', alignItems:'center', gap:6,
+            background: editMode
+              ? 'linear-gradient(135deg,var(--rose-vivid),var(--rose-dark))'
+              : 'white',
             color: editMode ? 'white' : 'var(--rose)',
+            boxShadow: editMode
+              ? '0 3px 12px rgba(212,132,154,0.45)'
+              : '0 1px 6px rgba(212,132,154,0.2)',
+            border: editMode ? 'none' : '1.5px solid rgba(212,132,154,0.35)',
           }}>
-            <Icon name={editMode ? 'check' : 'pencil'} size={12} color={editMode ? 'white' : 'var(--rose)'}/>
-            {editMode ? '完成' : '編輯'}
+            <Icon name={editMode ? 'check' : 'pencil'} size={13} color={editMode ? 'white' : 'var(--rose)'}/>
+            {editMode ? '完成編輯' : '編輯行程'}
           </button>
         </div>
       </div>
@@ -876,6 +939,11 @@ export default function ItineraryTab({ selectedDay, setSelectedDay }) {
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={(currentDay?.stops || []).map(s => s.id)} strategy={verticalListSortingStrategy}>
             <div style={{ padding:'6px 16px 24px' }}>
+              {/* Edit mode hint banner */}
+              <div style={{ marginBottom:10, padding:'8px 12px', background:'rgba(212,132,154,0.08)', borderRadius:10, border:'1px solid rgba(212,132,154,0.2)', display:'flex', alignItems:'center', gap:8 }}>
+                <Icon name="gripVertical" size={14} color="var(--rose)"/>
+                <span style={{ fontSize:11, color:'var(--rose)', fontWeight:600 }}>長按左側 ⠿ 拖曳排序　點垃圾桶刪除（需再次確認）</span>
+              </div>
               {(currentDay?.stops || []).map(stop =>
                 CONNECTOR_TYPES.has(stop.type)
                   ? <SortableTransitItem key={stop.id} stop={stop} onTypeChange={changeTransitType} onDelete={deleteStop}/>
@@ -903,7 +971,7 @@ export default function ItineraryTab({ selectedDay, setSelectedDay }) {
             if (seg.kind === 'activity')
               return <ActivityCard key={seg.stop.id} stop={seg.stop} expenses={expenses} onTap={setSelectedStop}/>
             if (seg.kind === 'transit')
-              return <TransitConnector key={`t-${i}`} stops={seg.stops}/>
+              return <TransitConnector key={`t-${i}`} stops={seg.stops} onTypeChange={changeTransitType}/>
             if (seg.kind === 'walkHint')
               return <WalkHint key={`w-${i}`} mins={seg.mins}/>
             return null
