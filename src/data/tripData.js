@@ -8,8 +8,8 @@ export const TRIP_DATA = {
     {
       day: 1, date: "2026-04-11",
       stops: [
-        { id: "d1s1",  time: "06:50", name: "臺灣桃園國際機場 T1（星宇航空 JX 834）", duration: "2h40m",  type: "flight" },
-        { id: "d1s2",  time: "10:30", name: "神戶機場 T2",                     duration: "1h00m",  type: "flight" },
+        { id: "d1s1",  time: "06:50", name: "臺灣桃園國際機場 T1", duration: "2h40m",  type: "flight", flightNo: "JX 834", fromAirport: "臺灣桃園國際機場 T1", toAirport: "神戶機場 T2" },
+        { id: "d1s2",  time: "10:30", name: "神戶機場 T2",         duration: "1h00m",  type: "flight" },
         { id: "d1s3",  time: "11:58", name: "JR三宮站",                        duration: "0h00m",  type: "train" },
         { id: "d1s4",  time: "12:31", name: "大阪車站",                        duration: "0h00m",  type: "train" },
         { id: "d1s5",  time: "12:35", name: "梅田",                            duration: "0h00m",  type: "walk" },
@@ -148,8 +148,8 @@ export const TRIP_DATA = {
         { id: "d8s2", time: "08:00", name: "JR芦原橋駅",                       duration: "0h00m",  type: "train" },
         { id: "d8s3", time: "08:18", name: "木津市場",                         duration: "1h00m",  type: "attraction" },
         { id: "d8s3t",time: "09:18", name: "搭車",                            duration: "1h00m",  type: "bus" },
-        { id: "d8s4", time: "13:10", name: "關西國際機場 T1（中華航空 CI157）", duration: "2h55m",  type: "flight" },
-        { id: "d8s5", time: "16:05", name: "臺灣桃園國際機場 T2",              duration: "0h00m",  type: "flight" },
+        { id: "d8s4", time: "13:10", name: "關西國際機場 T1", duration: "2h55m",  type: "flight", flightNo: "CI 157", fromAirport: "關西國際機場 T1", toAirport: "臺灣桃園國際機場 T2" },
+        { id: "d8s5", time: "16:05", name: "臺灣桃園國際機場 T2", duration: "0h00m",  type: "flight" },
       ]
     },
   ]
