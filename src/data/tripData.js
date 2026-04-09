@@ -1,5 +1,5 @@
 export const TRIP_DATA = {
-  version: 3,
+  version: 4,
   tripName: "Osaka Kyoto Nara 8天7夜美食旅程",
   startDate: "2026-04-11",
   endDate: "2026-04-18",
@@ -8,8 +8,8 @@ export const TRIP_DATA = {
     {
       day: 1, date: "2026-04-11",
       stops: [
-        { id: "d1s1",  time: "06:50", name: "臺灣桃園國際機場",               duration: "0h00m",  type: "flight" },
-        { id: "d1s2",  time: "10:30", name: "神戶機場",                        duration: "1h00m",  type: "flight" },
+        { id: "d1s1",  time: "06:50", name: "臺灣桃園國際機場 T1（星宇航空 JX 834）", duration: "2h40m",  type: "flight" },
+        { id: "d1s2",  time: "10:30", name: "神戶機場 T2",                     duration: "1h00m",  type: "flight" },
         { id: "d1s3",  time: "11:58", name: "JR三宮站",                        duration: "0h00m",  type: "train" },
         { id: "d1s4",  time: "12:31", name: "大阪車站",                        duration: "0h00m",  type: "train" },
         { id: "d1s5",  time: "12:35", name: "梅田",                            duration: "0h00m",  type: "walk" },
@@ -57,6 +57,7 @@ export const TRIP_DATA = {
         { id: "d3s3",  time: "10:48", name: "HARBS 心齋橋Parco店",             duration: "1h00m",  type: "restaurant" },
         { id: "d3s4",  time: "11:57", name: "道頓堀",                          duration: "1h00m",  type: "attraction" },
         { id: "d3s5",  time: "12:59", name: "烏龍麵、蕎麥麵 道頓堀今井 本店（午餐）", duration: "1h00m", type: "restaurant" },
+        { id: "d3s5t", time: "14:00", name: "搭車",                                  duration: "0h30m", type: "bus" },
         { id: "d3s6",  time: "15:30", name: "造幣博物館",                      duration: "0h30m",  type: "attraction" },
         { id: "d3s7",  time: "16:17", name: "大阪天滿宮",                      duration: "1h00m",  type: "attraction" },
         { id: "d3s8",  time: "17:36", name: "千代松勝蓋飯（晚餐）",             duration: "1h00m",  type: "restaurant" },
@@ -91,6 +92,7 @@ export const TRIP_DATA = {
         { id: "d5s8",  time: "13:47", name: "四天王寺前夕陽丘",                duration: "0h13m",  type: "train" },
         { id: "d5s9",  time: "14:09", name: "四天王寺",                        duration: "1h00m",  type: "attraction" },
         { id: "d5s10", time: "15:17", name: "Champ Tennoji",                   duration: "0h30m",  type: "shopping" },
+        { id: "d5s10t",time: "15:47", name: "步行",                            duration: "0h12m",  type: "walk" },
         { id: "d5s11", time: "15:47", name: "通天閣",                          duration: "1h00m",  type: "attraction" },
         { id: "d5s12", time: "16:53", name: "【KANKANDO】janjanyokocho｜osaka shinsekai", duration: "0h10m", type: "attraction" },
         { id: "d5s13", time: "18:00", name: "壽喜燒．火鍋 Nabeya（晚餐）",    duration: "1h00m",  type: "restaurant" },
@@ -145,8 +147,9 @@ export const TRIP_DATA = {
         { id: "d8s1", time: "07:50", name: "3-chōme-5-11 Naniwanishi",        duration: "0h00m",  type: "hotel" },
         { id: "d8s2", time: "08:00", name: "JR芦原橋駅",                       duration: "0h00m",  type: "train" },
         { id: "d8s3", time: "08:18", name: "木津市場",                         duration: "1h00m",  type: "attraction" },
-        { id: "d8s4", time: "13:10", name: "關西國際機場",                     duration: "0h00m",  type: "flight" },
-        { id: "d8s5", time: "16:05", name: "臺灣桃園國際機場",                 duration: "0h00m",  type: "flight" },
+        { id: "d8s3t",time: "09:18", name: "搭車",                            duration: "1h00m",  type: "bus" },
+        { id: "d8s4", time: "13:10", name: "關西國際機場 T1（中華航空 CI157）", duration: "2h55m",  type: "flight" },
+        { id: "d8s5", time: "16:05", name: "臺灣桃園國際機場 T2",              duration: "0h00m",  type: "flight" },
       ]
     },
   ]
