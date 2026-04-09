@@ -28,7 +28,7 @@ const STOP_ICON = {
 const TYPE_LABEL = {
   attraction: '景點', restaurant: '美食', shopping: '購物',
   hotel: '住宿', boat: '遊覽', flight: '航班', other: '其他',
-  train: '電車', walk: '步行', taxi: '計程車', bus: '巴士',
+  train: '電車', walk: '步行', taxi: '汽車', bus: '巴士',
 }
 
 const TRANSIT_ICON  = { train: 'train', walk: 'walk', taxi: 'taxi', bus: 'bus', flight: 'plane' }
@@ -536,7 +536,7 @@ function StopDetailSheet({ stop, isOpen, onClose, sync }) {
   // window.open inside geolocation callback is blocked by browsers (not a direct user gesture).
   // Let Google Maps itself ask for current location — simpler and works everywhere.
   const openGeo = () => {
-    const dest = encodeURIComponent(stop.name)
+    const dest = encodeURIComponent(stop.address || stop.name)
     window.open(`https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=transit`, '_blank')
   }
 
@@ -727,8 +727,8 @@ function StopDetailSheet({ stop, isOpen, onClose, sync }) {
             const allStops = sync.tripData?.days.flatMap(d => d.stops) || []
             const idx = allStops.findIndex(s => s.id === stop.id)
             const prev = idx > 0 ? allStops[idx-1] : null
-            const dest = encodeURIComponent(stop.name)
-            const origin = prev ? encodeURIComponent(prev.name) : ''
+            const dest = encodeURIComponent(stop.address || stop.name)
+            const origin = prev ? encodeURIComponent(prev.address || prev.name) : ''
             window.open(`https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}&travelmode=transit`, '_blank')
           }} style={mapBtn('var(--rose)')}>
             <Icon name="train" size={14} color="white"/>
