@@ -526,7 +526,7 @@ function StopDetailSheet({ stop, isOpen, onClose, sync }) {
   // window.open inside geolocation callback is blocked by browsers (not a direct user gesture).
   // Let Google Maps itself ask for current location — simpler and works everywhere.
   const openGeo = () => {
-    const dest = encodeURIComponent(stop.name + ' Japan')
+    const dest = encodeURIComponent(stop.name)
     window.open(`https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=transit`, '_blank')
   }
 
@@ -717,8 +717,8 @@ function StopDetailSheet({ stop, isOpen, onClose, sync }) {
             const allStops = sync.tripData?.days.flatMap(d => d.stops) || []
             const idx = allStops.findIndex(s => s.id === stop.id)
             const prev = idx > 0 ? allStops[idx-1] : null
-            const dest = encodeURIComponent(stop.name + ' Japan')
-            const origin = prev ? encodeURIComponent(prev.name + ' Japan') : ''
+            const dest = encodeURIComponent(stop.name)
+            const origin = prev ? encodeURIComponent(prev.name) : ''
             window.open(`https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}&travelmode=transit`, '_blank')
           }} style={mapBtn('var(--rose)')}>
             <Icon name="train" size={14} color="white"/>
