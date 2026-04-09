@@ -1,9 +1,10 @@
 import { useState, useRef } from 'react'
 import { useSync } from '../context/SyncContext'
+import { useGoogleDrive } from '../hooks/useGoogleDrive'
 import Icon from '../components/Icon'
 import BottomSheet from '../components/BottomSheet'
 
-// ── Image helpers (device-local, not synced to Firestore) ──────
+// ── Local image fallback (device-only) ────────────────────────
 const IMG_KEY = (id) => `shop_img_${id}`
 
 function loadImg(id) {
@@ -16,7 +17,7 @@ function deleteImg(id) {
   try { localStorage.removeItem(IMG_KEY(id)) } catch (_) {}
 }
 
-/** Compress image to JPEG ≤ 800px wide / tall, quality 0.75 */
+/** Compress image to JPEG ≤ 800px, quality 0.75 */
 function compressImage(file) {
   return new Promise((resolve) => {
     const reader = new FileReader()
@@ -38,6 +39,17 @@ function compressImage(file) {
     }
     reader.readAsDataURL(file)
   })
+}
+
+/** Convert a compressed dataUrl to a File object for Drive upload */
+function dataUrlToFile(dataUrl, filename) {
+  const arr   = dataUrl.split(',')
+  const mime  = arr[0].match(/:(.*?);/)[1]
+  const bstr  = atob(arr[1])
+  let n       = bstr.length
+  const u8arr = new Uint8Array(n)
+  while (n--) u8arr[n] = bstr.charCodeAt(n)
+  return new File([new Blob([u8arr], { type: mime })], filename, { type: mime })
 }
 
 // ── Full-screen image preview ─────────────────────────────────
@@ -73,26 +85,77 @@ function ImagePreview({ src, onClose }) {
   )
 }
 
+// ── Drive Sign-In Banner ──────────────────────────────────────
+function DriveBanner({ drive }) {
+  return (
+    <div style={{
+      margin: '0 16px 10px',
+      padding: '9px 14px',
+      borderRadius: 12,
+      background: drive.user ? 'rgba(66,133,244,0.07)' : 'rgba(212,132,154,0.06)',
+      border: `1px solid ${drive.user ? 'rgba(66,133,244,0.2)' : 'rgba(212,132,154,0.15)'}`,
+      display: 'flex', alignItems: 'center', gap: 10,
+    }}>
+      {drive.user ? (
+        <>
+          {drive.user.picture
+            ? <img src={drive.user.picture} style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0 }} alt=""/>
+            : <Icon name="cloud" size={16} color="#4285f4" strokeWidth={1.5}/>
+          }
+          <span style={{ flex: 1, fontSize: 11, color: 'var(--ink-soft)' }}>
+            照片將同步至 Google Drive・{drive.user.name}
+          </span>
+          <button
+            onClick={drive.signOut}
+            style={{ fontSize: 11, color: '#4285f4', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, flexShrink: 0 }}
+          >
+            登出
+          </button>
+        </>
+      ) : (
+        <>
+          <Icon name="cloud" size={16} color="var(--rose)" strokeWidth={1.5}/>
+          <span style={{ flex: 1, fontSize: 11, color: 'var(--ink-soft)' }}>
+            登入 Google 讓購物圖片跨裝置同步
+          </span>
+          <button
+            onClick={drive.signIn}
+            disabled={drive.loading}
+            style={{
+              fontSize: 11, color: '#4285f4', background: 'none', border: 'none',
+              cursor: drive.loading ? 'default' : 'pointer',
+              fontWeight: 600, flexShrink: 0,
+              opacity: drive.loading ? 0.5 : 1,
+            }}
+          >
+            {drive.loading ? '登入中…' : '登入'}
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
 const CATEGORIES = ['零食', '飲料', '伴手禮', '日用品', '電子', '其他']
 
 // ── Add Item Sheet ────────────────────────────────────────────
 function AddItemSheet({ isOpen, onClose, onAdd }) {
-  const [name, setName]     = useState('')
-  const [qty,  setQty]      = useState('')
-  const [cat,  setCat]      = useState('')
-  const [note, setNote]     = useState('')
+  const [name, setName] = useState('')
+  const [qty,  setQty]  = useState('')
+  const [cat,  setCat]  = useState('')
+  const [note, setNote] = useState('')
 
   const reset = () => { setName(''); setQty(''); setCat(''); setNote('') }
 
   const handleAdd = () => {
     if (!name.trim()) return
     onAdd({
-      id:      `shop_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      name:    name.trim(),
-      qty:     qty.trim(),
-      note:    note.trim(),
+      id:       `shop_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      name:     name.trim(),
+      qty:      qty.trim(),
+      note:     note.trim(),
       category: cat,
-      checked: false,
+      checked:  false,
     })
     reset(); onClose()
   }
@@ -141,28 +204,56 @@ function AddItemSheet({ isOpen, onClose, onAdd }) {
 const lbl = { display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--ink-soft)', marginBottom: 5 }
 
 // ── Shopping Item Row ─────────────────────────────────────────
-function ShoppingRow({ item, onToggle, onDelete, onImgChange }) {
+function ShoppingRow({ item, onToggle, onDelete, onUpdate, driveSignedIn, driveUpload }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [imgSrc,        setImgSrc]        = useState(() => loadImg(item.id))
+  const [localImgSrc,   setLocalImgSrc]   = useState(() => loadImg(item.id))
+  const [uploading,     setUploading]     = useState(false)
   const [previewOpen,   setPreviewOpen]   = useState(false)
   const fileRef = useRef(null)
+
+  // Drive image takes priority over local
+  const driveImg = item.driveImage   // { driveId, previewUrl, viewLink } or null
+  const imgSrc   = driveImg?.previewUrl || localImgSrc
 
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
-    const dataUrl = await compressImage(file)
-    saveImg(item.id, dataUrl)
-    setImgSrc(dataUrl)
-    onImgChange?.()
-    // reset so same file can be selected again
     e.target.value = ''
+
+    const dataUrl = await compressImage(file)
+
+    if (driveSignedIn && driveUpload) {
+      setUploading(true)
+      try {
+        const driveFile = dataUrlToFile(dataUrl, `shop_${item.id}.jpg`)
+        const result    = await driveUpload(driveFile)
+        // Clear any local image, store Drive reference on item
+        deleteImg(item.id)
+        setLocalImgSrc(null)
+        onUpdate({ ...item, driveImage: { driveId: result.driveId, previewUrl: result.previewUrl, viewLink: result.viewLink } })
+      } catch (err) {
+        // Fall back to local storage on Drive failure
+        saveImg(item.id, dataUrl)
+        setLocalImgSrc(dataUrl)
+      } finally {
+        setUploading(false)
+      }
+    } else {
+      saveImg(item.id, dataUrl)
+      setLocalImgSrc(dataUrl)
+    }
   }
 
   const handleDeleteImg = (e) => {
     e.stopPropagation()
     deleteImg(item.id)
-    setImgSrc(null)
+    setLocalImgSrc(null)
+    if (item.driveImage) {
+      onUpdate({ ...item, driveImage: null })
+    }
   }
+
+  const isDrive = !!driveImg
 
   return (
     <>
@@ -206,8 +297,17 @@ function ShoppingRow({ item, onToggle, onDelete, onImgChange }) {
           </div>
         </div>
 
-        {/* Thumbnail or camera button */}
-        {imgSrc ? (
+        {/* Thumbnail / upload button / uploading spinner */}
+        {uploading ? (
+          <div style={{
+            width: 52, height: 52, borderRadius: 8, flexShrink: 0,
+            background: 'var(--rose-pale)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3,
+          }}>
+            <Icon name="cloud" size={14} color="var(--rose)" strokeWidth={1.5}/>
+            <span style={{ fontSize: 8, color: 'var(--rose)', fontWeight: 700 }}>上傳中…</span>
+          </div>
+        ) : imgSrc ? (
           <div style={{ position: 'relative', flexShrink: 0 }}>
             <img
               src={imgSrc}
@@ -220,7 +320,7 @@ function ShoppingRow({ item, onToggle, onDelete, onImgChange }) {
                 opacity: item.checked ? 0.5 : 1,
               }}
             />
-            {/* Remove image × */}
+            {/* Remove image */}
             <button
               onClick={handleDeleteImg}
               style={{
@@ -232,21 +332,23 @@ function ShoppingRow({ item, onToggle, onDelete, onImgChange }) {
             >
               <Icon name="x" size={10} color="white" strokeWidth={2.5}/>
             </button>
-            {/* Device-local badge */}
+            {/* Sync badge */}
             <div style={{
               position: 'absolute', bottom: -1, left: 0, right: 0,
               textAlign: 'center', fontSize: 8, fontWeight: 700,
-              color: 'rgba(255,255,255,0.9)',
-              background: 'rgba(0,0,0,0.45)',
+              color: 'rgba(255,255,255,0.95)',
+              background: isDrive ? 'rgba(66,133,244,0.75)' : 'rgba(0,0,0,0.45)',
               borderRadius: '0 0 7px 7px', padding: '1px 0',
               letterSpacing: '0.03em',
-            }}>僅本機</div>
+            }}>
+              {isDrive ? '已同步' : '僅本機'}
+            </div>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flexShrink: 0 }}>
             <button
               onClick={() => fileRef.current?.click()}
-              title="新增參考圖片（僅存本機，不同步）"
+              title={driveSignedIn ? '上傳到 Google Drive' : '新增參考圖片（僅存本機）'}
               style={{
                 width: 36, height: 36, borderRadius: 8,
                 border: '1.5px dashed rgba(212,132,154,0.35)',
@@ -256,11 +358,12 @@ function ShoppingRow({ item, onToggle, onDelete, onImgChange }) {
             >
               <Icon name="camera" size={15} color="var(--rose)" strokeWidth={1.5}/>
             </button>
-            <span style={{ fontSize: 8, color: 'var(--ink-faint)', fontWeight: 600, letterSpacing: '0.02em' }}>僅本機</span>
+            <span style={{ fontSize: 8, color: 'var(--ink-faint)', fontWeight: 600, letterSpacing: '0.02em' }}>
+              {driveSignedIn ? '上傳雲端' : '僅本機'}
+            </span>
           </div>
         )}
 
-        {/* Hidden file input — no capture so user can choose gallery or camera */}
         <input
           ref={fileRef}
           type="file"
@@ -279,7 +382,6 @@ function ShoppingRow({ item, onToggle, onDelete, onImgChange }) {
         </button>
       </div>
 
-      {/* Full-screen preview */}
       {previewOpen && <ImagePreview src={imgSrc} onClose={() => setPreviewOpen(false)}/>}
     </>
   )
@@ -287,16 +389,16 @@ function ShoppingRow({ item, onToggle, onDelete, onImgChange }) {
 
 // ── Main ──────────────────────────────────────────────────────
 export default function ShoppingTab() {
-  const sync = useSync()
+  const sync  = useSync()
+  const drive = useGoogleDrive()
   const [showAdd, setShowAdd] = useState(false)
-  const [filter, setFilter]   = useState('all') // 'all' | 'pending' | 'checked'
+  const [filter, setFilter]   = useState('all')
 
   const items    = sync.shopping || []
   const total    = items.length
   const checked  = items.filter(i => i.checked).length
   const progress = total > 0 ? (checked / total) * 100 : 0
 
-  // Filter + sort: unchecked first
   const visible = items
     .filter(i => filter === 'all' ? true : filter === 'pending' ? !i.checked : i.checked)
     .sort((a, b) => {
@@ -304,18 +406,15 @@ export default function ShoppingTab() {
       return (a.category || '').localeCompare(b.category || '')
     })
 
-  // Group by category (for unchecked)
-  const unchecked = visible.filter(i => !i.checked)
+  const unchecked    = visible.filter(i => !i.checked)
   const checkedItems = visible.filter(i => i.checked)
 
-  // Group unchecked by category
   const groups = {}
   unchecked.forEach(item => {
     const key = item.category || '未分類'
     if (!groups[key]) groups[key] = []
     groups[key].push(item)
   })
-  // Sort categories: 未分類 last
   const sortedGroups = Object.keys(groups).sort((a, b) => {
     if (a === '未分類') return 1
     if (b === '未分類') return -1
@@ -323,8 +422,17 @@ export default function ShoppingTab() {
   })
 
   const handleToggle = (item) => sync.updateShoppingItem({ ...item, checked: !item.checked })
-  const handleDelete = (id) => sync.deleteShoppingItem(id)
+  const handleDelete = (id)   => sync.deleteShoppingItem(id)
   const handleAdd    = (item) => sync.addShoppingItem(item)
+  const handleUpdate = (item) => sync.updateShoppingItem(item)
+
+  const rowProps = {
+    onToggle:      handleToggle,
+    onDelete:      handleDelete,
+    onUpdate:      handleUpdate,
+    driveSignedIn: !!drive.user,
+    driveUpload:   drive.uploadFile,
+  }
 
   return (
     <div>
@@ -341,13 +449,14 @@ export default function ShoppingTab() {
           <div style={{ fontSize: 28, fontWeight: 300, fontFamily: 'Cormorant Garant,serif', letterSpacing: '0.02em' }}>
             {checked} / {total} <span style={{ fontSize: 14, opacity: 0.8, fontWeight: 400 }}>項已完成</span>
           </div>
-
-          {/* Progress bar */}
           <div style={{ marginTop: 12, height: 4, background: 'rgba(255,255,255,0.3)', borderRadius: 2, overflow: 'hidden' }}>
             <div style={{ height: '100%', width: `${progress}%`, background: 'white', borderRadius: 2, transition: 'width 0.4s ease' }}/>
           </div>
         </div>
       </div>
+
+      {/* Drive sign-in banner */}
+      <DriveBanner drive={drive}/>
 
       {/* Filter pills */}
       <div style={{ display: 'flex', gap: 8, padding: '0 16px 12px' }}>
@@ -364,7 +473,7 @@ export default function ShoppingTab() {
       {/* Empty state */}
       {total === 0 && (
         <div style={{ textAlign: 'center', padding: '52px 0', color: 'var(--ink-faint)' }}>
-          <Icon name="shoppingCart" size={36} color="rgba(212,132,154,0.35)" style={{ marginBottom: 12 }}/>
+          <Icon name="shoppingCart" size={36} color="rgba(212,132,154,0.35)"/>
           <div style={{ fontFamily: 'Cormorant Garant,serif', fontSize: 16, color: 'var(--ink-soft)', marginTop: 12 }}>購物清單空空如也</div>
           <div style={{ fontSize: 12, marginTop: 4 }}>點右下角 ＋ 開始新增</div>
         </div>
@@ -372,7 +481,6 @@ export default function ShoppingTab() {
 
       {/* Items */}
       <div style={{ padding: '0 16px 100px' }}>
-        {/* Grouped unchecked items */}
         {sortedGroups.map(group => (
           <div key={group}>
             {sortedGroups.length > 1 || group !== '未分類' ? (
@@ -381,12 +489,11 @@ export default function ShoppingTab() {
               </div>
             ) : null}
             {groups[group].map(item => (
-              <ShoppingRow key={item.id} item={item} onToggle={handleToggle} onDelete={handleDelete} onImgChange={()=>{}}/>
+              <ShoppingRow key={item.id} item={item} {...rowProps}/>
             ))}
           </div>
         ))}
 
-        {/* Checked items section */}
         {checkedItems.length > 0 && (
           <>
             {unchecked.length > 0 && (
@@ -396,7 +503,7 @@ export default function ShoppingTab() {
               已購買 · {checkedItems.length} 項
             </div>
             {checkedItems.map(item => (
-              <ShoppingRow key={item.id} item={item} onToggle={handleToggle} onDelete={handleDelete} onImgChange={()=>{}}/>
+              <ShoppingRow key={item.id} item={item} {...rowProps}/>
             ))}
           </>
         )}
