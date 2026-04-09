@@ -1,7 +1,7 @@
 const HOTEL_ADDR = "3-chōme-5-11 Naniwanishi, Naniwa Ward, Osaka, 556-0026日本"
 
 export const TRIP_DATA = {
-  version: 7,
+  version: 8,
   tripName: "Osaka Kyoto Nara 8天7夜美食旅程",
   startDate: "2026-04-11",
   endDate: "2026-04-18",
@@ -44,7 +44,7 @@ export const TRIP_DATA = {
         { id: "d2s7",  time: "15:32", name: "蕎麥麵 嵐山よしむら",   duration: "1h00m",  type: "restaurant" },
         { id: "d2s8",  time: "16:41", name: "天龍寺",               duration: "1h00m",  type: "attraction" },
         { id: "d2s9",  time: "17:50", name: "渡月橋",               duration: "1h00m",  type: "attraction" },
-        { id: "d2s10", time: "19:58", name: "近鉄日本橋駅",          duration: "1h00m",  type: "taxi" },
+        { id: "d2s10", time: "19:58", name: "近鉄日本橋駅",          duration: "1h00m",  type: "car" },
         { id: "d2s11", time: "20:03", name: "福太郎大阪燒（晚餐）",   duration: "1h00m",  type: "restaurant" },
         { id: "d2s12", time: "21:08", name: "近鉄日本橋駅",          duration: "0h05m",  type: "walk" },
         { id: "d2s13", time: "21:27", name: "JR芦原橋駅",           duration: "0h22m",  type: "train" },
@@ -168,11 +168,11 @@ export const TYPE_CONFIG = {
   hotel:       { icon: '🏠', color: '#27AE60', bg: '#EAFAF1', label: '住宿' },
   train:       { icon: '🚃', color: '#5D7A8C', bg: '#EBF5FB', label: '電車' },
   walk:        { icon: '🚶', color: '#95A5A6', bg: '#F2F3F4', label: '步行' },
-  taxi:        { icon: '🚕', color: '#F1C40F', bg: '#FEF9E7', label: '汽車' },
+  car:         { icon: '🚕', color: '#F1C40F', bg: '#FEF9E7', label: '汽車' },
   bus:         { icon: '🚌', color: '#1A6B9A', bg: '#E6F3FB', label: '巴士' },
   flight:      { icon: '✈️', color: '#2980B9', bg: '#EAF4FC', label: '飛機' },
   boat:        { icon: '⛵', color: '#1ABC9C', bg: '#E8F8F5', label: '渡船' },
   other:       { icon: '📌', color: '#BDC3C7', bg: '#F2F3F4', label: '其他' },
 }
 
-export const TRANSIT_TYPES = new Set(['train', 'walk', 'taxi', 'bus', 'flight', 'boat'])
+export const TRANSIT_TYPES = new Set(['train', 'walk', 'car', 'bus', 'flight', 'boat'])

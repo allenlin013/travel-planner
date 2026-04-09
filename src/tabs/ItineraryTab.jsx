@@ -17,8 +17,8 @@ import BottomSheet from '../components/BottomSheet'
 import Icon from '../components/Icon'
 
 // ── Constants ─────────────────────────────────────────────────
-const CONNECTOR_TYPES = new Set(['train', 'walk', 'taxi', 'bus'])
-const TRANSIT_TYPES   = ['walk', 'train', 'bus', 'taxi']
+const CONNECTOR_TYPES = new Set(['train', 'walk', 'car', 'bus'])
+const TRANSIT_TYPES   = ['walk', 'train', 'bus', 'car', 'flight']
 
 const STOP_ICON = {
   attraction: 'temple', restaurant: 'utensils', shopping: 'shoppingBag',
@@ -28,10 +28,10 @@ const STOP_ICON = {
 const TYPE_LABEL = {
   attraction: '景點', restaurant: '美食', shopping: '購物',
   hotel: '住宿', boat: '遊覽', flight: '航班', other: '其他',
-  train: '電車', walk: '步行', taxi: '汽車', bus: '巴士',
+  train: '電車', walk: '步行', car: '汽車', bus: '巴士',
 }
 
-const TRANSIT_ICON  = { train: 'train', walk: 'walk', taxi: 'taxi', bus: 'bus', flight: 'plane' }
+const TRANSIT_ICON  = { train: 'train', walk: 'walk', car: 'taxi', bus: 'bus', flight: 'plane' }
 const WEATHER_ICON  = { '☀️':'sun', '🌤':'cloud', '☁️':'cloud', '🌦':'cloudRain', '🌧':'cloudRain', '🌨':'cloudSnow', '⛈':'cloudRain', '🌫':'wind' }
 
 // ── Time helpers ──────────────────────────────────────────────
@@ -80,7 +80,7 @@ function buildSegments(stops) {
       // Don't insert walkHint between two flight stops (airports)
       if (curr.type === 'flight' && next.type === 'flight') continue
       const walkMins = timeToMins(next.time) - (timeToMins(curr.time) + parseMins(curr.duration))
-      if (walkMins > 0 && walkMins <= 90) out.push({ kind: 'walkHint', mins: walkMins })
+      if (walkMins > 0 && walkMins <= 90) out.push({ kind: 'walkHint', mins: walkMins, afterStopId: curr.id })
     }
   }
   return out
@@ -190,23 +190,103 @@ function ActivityCard({ stop, expenses, onTap }) {
 }
 
 // ── Walk Hint ─────────────────────────────────────────────────
-function WalkHint({ mins }) {
+function WalkHint({ mins, onAddTransit }) {
+  const dashed = { width:1.5, height:12, background:'repeating-linear-gradient(to bottom,rgba(212,132,154,0.35) 0,rgba(212,132,154,0.35) 3px,transparent 3px,transparent 7px)' }
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', padding:'2px 0' }}>
-      <div style={{ width:1.5, height:12, background:'repeating-linear-gradient(to bottom,rgba(212,132,154,0.35) 0,rgba(212,132,154,0.35) 3px,transparent 3px,transparent 7px)' }}/>
+      <div style={dashed}/>
       <div style={{ display:'flex', alignItems:'center', gap:5, padding:'3px 0' }}>
         <div style={{ width:30, height:30, borderRadius:'50%', background:'var(--rose-pale)', border:'1.5px solid rgba(212,132,154,0.25)', display:'flex', alignItems:'center', justifyContent:'center' }}>
           <Icon name="walk" size={14} color="var(--rose)" strokeWidth={1.5}/>
         </div>
         <span style={{ fontSize:10, color:'var(--ink-soft)', fontWeight:500 }}>步行 約 {minsToHm(mins)}</span>
+        {onAddTransit && (
+          <button type="button" onClick={onAddTransit}
+            title="新增交通方式"
+            style={{ width:20, height:20, borderRadius:'50%', border:'1.5px solid rgba(212,132,154,0.4)', background:'white', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <Icon name="plus" size={10} color="var(--rose)" strokeWidth={2.5}/>
+          </button>
+        )}
       </div>
-      <div style={{ width:1.5, height:12, background:'repeating-linear-gradient(to bottom,rgba(212,132,154,0.35) 0,rgba(212,132,154,0.35) 3px,transparent 3px,transparent 7px)' }}/>
+      <div style={dashed}/>
+    </div>
+  )
+}
+
+// ── Transit Segment Row ───────────────────────────────────────
+function TransitSegmentRow({ stop, onTypeChange, onDelete, onUpdateDuration }) {
+  const [editingDur, setEditingDur] = useState(false)
+  const parsed = stop.duration?.match(/(\d+)h(\d+)m/)
+  const [hrs,  setHrs]  = useState(parsed ? parseInt(parsed[1]) : 0)
+  const [mins, setMins] = useState(parsed ? parseInt(parsed[2]) : 0)
+
+  const saveDur = () => {
+    onUpdateDuration(stop.id, `${hrs}h${String(mins).padStart(2,'0')}m`)
+    setEditingDur(false)
+  }
+
+  return (
+    <div>
+      {/* Type pills + delete */}
+      <div style={{ display:'flex', gap:5, flexWrap:'wrap', alignItems:'center', marginBottom:6 }}>
+        {TRANSIT_TYPES.map(t => {
+          const active = stop.type === t
+          return (
+            <button type="button" key={t}
+              onPointerDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}
+              onClick={() => onTypeChange(stop.id, t)}
+              style={{
+                padding:'4px 10px', borderRadius:10, fontSize:11, fontWeight:600,
+                border: active ? 'none' : '1.5px solid rgba(212,132,154,0.3)',
+                cursor:'pointer', transition:'all 0.15s',
+                background: active ? 'var(--rose)' : 'white',
+                color: active ? 'white' : 'var(--rose)',
+              }}
+            >{TYPE_LABEL[t]}</button>
+          )
+        })}
+        {onDelete && (
+          <button type="button" onClick={onDelete}
+            onPointerDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}
+            style={{ marginLeft:'auto', width:22, height:22, borderRadius:'50%', border:'1px solid rgba(212,132,154,0.3)', background:'white', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+            <Icon name="x" size={11} color="var(--rose)" strokeWidth={2}/>
+          </button>
+        )}
+      </div>
+      {/* Duration */}
+      <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+        <Icon name="clock" size={12} color="var(--ink-faint)" strokeWidth={1.5}/>
+        {editingDur ? (
+          <>
+            <input type="number" value={hrs} min={0} max={23}
+              onChange={e => setHrs(Math.max(0, Math.min(23, +e.target.value)))}
+              style={{ width:38, padding:'2px 4px', fontSize:12, border:'1px solid rgba(212,132,154,0.4)', borderRadius:6, textAlign:'center' }}/>
+            <span style={{ fontSize:11, color:'var(--ink-soft)' }}>時</span>
+            <input type="number" value={mins} min={0} max={59}
+              onChange={e => setMins(Math.max(0, Math.min(59, +e.target.value)))}
+              style={{ width:38, padding:'2px 4px', fontSize:12, border:'1px solid rgba(212,132,154,0.4)', borderRadius:6, textAlign:'center' }}/>
+            <span style={{ fontSize:11, color:'var(--ink-soft)' }}>分</span>
+            <button type="button" onClick={saveDur}
+              style={{ padding:'2px 8px', borderRadius:8, fontSize:11, fontWeight:700, background:'var(--rose)', color:'white', border:'none', cursor:'pointer' }}>
+              確認
+            </button>
+          </>
+        ) : (
+          <>
+            <span style={{ fontSize:11, color:'var(--ink-soft)' }}>{fmtDur(stop.duration) || '未設定時間'}</span>
+            <button type="button" onClick={() => setEditingDur(true)}
+              style={{ background:'none', border:'none', cursor:'pointer', padding:2, display:'flex', alignItems:'center' }}>
+              <Icon name="pencil" size={11} color="rgba(212,132,154,0.6)"/>
+            </button>
+          </>
+        )}
+      </div>
     </div>
   )
 }
 
 // ── Transit Connector (view mode) ─────────────────────────────
-function TransitConnector({ stops, onTypeChange }) {
+function TransitConnector({ stops, onTypeChange, onDeleteTransit, onAddTransit, onUpdateDuration }) {
   const [expanded, setExpanded] = useState(false)
   const totalMins   = stops.reduce((s, st) => s + parseMins(st.duration), 0)
   const primaryType = stops[0]?.type || 'train'
@@ -226,50 +306,31 @@ function TransitConnector({ stops, onTypeChange }) {
       {expanded && (
         <div style={{ width:'88%', background:'white', border:'1px solid rgba(212,132,154,0.2)', borderRadius:12, padding:'12px 14px', boxShadow:'0 4px 16px rgba(212,132,154,0.12)', marginBottom:4 }}>
           {stops.map((st, i) => (
-            <div key={st.id} style={{ paddingBottom: i < stops.length-1 ? 12 : 0, borderBottom: i < stops.length-1 ? '1px solid rgba(212,132,154,0.08)' : 'none', marginBottom: i < stops.length-1 ? 12 : 0 }}>
-              {/* Stop name + time */}
-              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
-                <Icon name={TRANSIT_ICON[st.type] || 'train'} size={14} color="var(--rose-dark)"/>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:12, fontWeight:600, color:'var(--ink)' }}>{st.name}</div>
-                  {parseMins(st.duration) > 0 && <div style={{ fontSize:10, color:'var(--ink-soft)' }}>{fmtDur(st.duration)}</div>}
-                </div>
-                <span style={{ fontSize:11, color:'var(--rose)', fontFamily:'Cormorant Garant,serif', fontWeight:700 }}>{st.time}</span>
-              </div>
-              {/* Flight details inline */}
-              {st.type === 'flight' && st.flightNo && (
-                <div style={{ background:'rgba(41,128,185,0.06)', borderRadius:8, padding:'7px 10px', marginBottom:8, fontSize:11, color:'var(--ink-soft)', lineHeight:1.7 }}>
-                  <div><span style={{ fontWeight:700, color:'var(--ink)' }}>班機：</span>{st.flightNo}</div>
-                  <div><span style={{ fontWeight:700, color:'var(--ink)' }}>出發：</span>{st.fromAirport}</div>
-                  <div><span style={{ fontWeight:700, color:'var(--ink)' }}>抵達：</span>{st.toAirport}</div>
-                </div>
-              )}
-              {/* Type selector — visible directly, no need for edit mode */}
-              {onTypeChange && (
-                <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
-                  {TRANSIT_TYPES.map(t => {
-                    const active = st.type === t
-                    return (
-                      <button
-                        type="button"
-                        key={t}
-                        onClick={() => onTypeChange(st.id, t)}
-                        style={{
-                          padding:'4px 10px', borderRadius:10, fontSize:11, fontWeight:600,
-                          border: active ? 'none' : '1.5px solid rgba(212,132,154,0.3)',
-                          cursor:'pointer', transition:'all 0.15s',
-                          background: active ? 'var(--rose)' : 'white',
-                          color: active ? 'white' : 'var(--rose)',
-                        }}
-                      >
-                        {TYPE_LABEL[t]}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
+            <div key={st.id} style={{ paddingBottom:12, borderBottom:'1px solid rgba(212,132,154,0.08)', marginBottom:12 }}>
+              <TransitSegmentRow
+                stop={st}
+                onTypeChange={onTypeChange}
+                onDelete={onDeleteTransit ? () => onDeleteTransit(st.id) : null}
+                onUpdateDuration={onUpdateDuration}
+              />
             </div>
           ))}
+          {/* Add segment */}
+          {onAddTransit && (
+            <button type="button"
+              onClick={() => onAddTransit(stops[stops.length - 1].id)}
+              onPointerDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}
+              style={{
+                width:'100%', padding:'6px 0', marginTop:2,
+                background:'none', border:'1.5px dashed rgba(212,132,154,0.35)',
+                borderRadius:8, cursor:'pointer',
+                display:'flex', alignItems:'center', justifyContent:'center', gap:5,
+                color:'var(--rose)', fontSize:12, fontWeight:600,
+              }}>
+              <Icon name="plus" size={13} color="var(--rose)"/>
+              新增交通段
+            </button>
+          )}
         </div>
       )}
 
@@ -803,6 +864,26 @@ export default function ItineraryTab({ selectedDay, setSelectedDay }) {
     patchDay(currentDay.stops.map(s => s.id === id ? { ...s, type: newType } : s))
   }, [currentDay, patchDay])
 
+  const insertTransit = useCallback((afterStopId) => {
+    if (!currentDay) return
+    const stops = currentDay.stops
+    const idx = stops.findIndex(s => s.id === afterStopId)
+    if (idx === -1) return
+    const newStop = {
+      id: `tr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      time: stops[idx].time,
+      name: '步行',
+      duration: '0h10m',
+      type: 'walk',
+    }
+    patchDay([...stops.slice(0, idx + 1), newStop, ...stops.slice(idx + 1)])
+  }, [currentDay, patchDay])
+
+  const updateTransitDuration = useCallback((id, newDuration) => {
+    if (!currentDay) return
+    patchDay(currentDay.stops.map(s => s.id === id ? { ...s, duration: newDuration } : s))
+  }, [currentDay, patchDay])
+
   const handleDragEnd = useCallback(({ active, over }) => {
     if (!over || active.id === over.id || !currentDay) return
     const stops  = currentDay.stops
@@ -899,9 +980,14 @@ export default function ItineraryTab({ selectedDay, setSelectedDay }) {
             if (seg.kind === 'activity')
               return <ActivityCard key={seg.stop.id} stop={seg.stop} expenses={expenses} onTap={setSelectedStop}/>
             if (seg.kind === 'transit')
-              return <TransitConnector key={`t-${i}`} stops={seg.stops} onTypeChange={changeTransitType}/>
+              return <TransitConnector key={`t-${i}`} stops={seg.stops}
+                onTypeChange={changeTransitType}
+                onDeleteTransit={deleteStop}
+                onAddTransit={insertTransit}
+                onUpdateDuration={updateTransitDuration}/>
             if (seg.kind === 'walkHint')
-              return <WalkHint key={`w-${i}`} mins={seg.mins}/>
+              return <WalkHint key={`w-${i}`} mins={seg.mins}
+                onAddTransit={() => insertTransit(seg.afterStopId)}/>
             return null
           })}
         </div>
