@@ -232,20 +232,32 @@ function ShoppingRow({ item, onToggle, onDelete, onImgChange }) {
             >
               <Icon name="x" size={10} color="white" strokeWidth={2.5}/>
             </button>
+            {/* Device-local badge */}
+            <div style={{
+              position: 'absolute', bottom: -1, left: 0, right: 0,
+              textAlign: 'center', fontSize: 8, fontWeight: 700,
+              color: 'rgba(255,255,255,0.9)',
+              background: 'rgba(0,0,0,0.45)',
+              borderRadius: '0 0 7px 7px', padding: '1px 0',
+              letterSpacing: '0.03em',
+            }}>僅本機</div>
           </div>
         ) : (
-          <button
-            onClick={() => fileRef.current?.click()}
-            title="新增參考圖片"
-            style={{
-              width: 36, height: 36, borderRadius: 8, flexShrink: 0,
-              border: '1.5px dashed rgba(212,132,154,0.35)',
-              background: 'var(--rose-pale)', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}
-          >
-            <Icon name="camera" size={15} color="var(--rose)" strokeWidth={1.5}/>
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+            <button
+              onClick={() => fileRef.current?.click()}
+              title="新增參考圖片（僅存本機，不同步）"
+              style={{
+                width: 36, height: 36, borderRadius: 8,
+                border: '1.5px dashed rgba(212,132,154,0.35)',
+                background: 'var(--rose-pale)', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <Icon name="camera" size={15} color="var(--rose)" strokeWidth={1.5}/>
+            </button>
+            <span style={{ fontSize: 8, color: 'var(--ink-faint)', fontWeight: 600, letterSpacing: '0.02em' }}>僅本機</span>
+          </div>
         )}
 
         {/* Hidden file input — no capture so user can choose gallery or camera */}

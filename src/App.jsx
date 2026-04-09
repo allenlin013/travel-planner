@@ -9,26 +9,20 @@ import DocumentsTab from './tabs/DocumentsTab'
 import ShoppingTab from './tabs/ShoppingTab'
 import CurrencySheet from './components/CurrencySheet'
 
-const COVER_KEY = 'trip_cover_img'
-
-function loadCover() {
-  try { return localStorage.getItem(COVER_KEY) || null } catch (_) { return null }
-}
-
-/** Compress to ≤1200px wide, JPEG 0.82 quality */
+/** Compress to ≤600px wide, JPEG 0.72 quality — keeps base64 under ~150KB for Firestore */
 function compressCover(file) {
   return new Promise((resolve) => {
     const reader = new FileReader()
     reader.onload = (e) => {
       const img = new Image()
       img.onload = () => {
-        const MAX = 1200
+        const MAX = 600
         let { width, height } = img
         if (width > MAX) { height = Math.round(height * MAX / width); width = MAX }
         const canvas = document.createElement('canvas')
         canvas.width = width; canvas.height = height
         canvas.getContext('2d').drawImage(img, 0, 0, width, height)
-        resolve(canvas.toDataURL('image/jpeg', 0.82))
+        resolve(canvas.toDataURL('image/jpeg', 0.72))
       }
       img.src = e.target.result
     }
@@ -38,8 +32,9 @@ function compressCover(file) {
 
 // ── Cover Image Banner ────────────────────────────────────────
 function CoverBanner() {
-  const [cover,    setCover]    = useState(loadCover)
-  const [loading,  setLoading]  = useState(false)
+  const sync = useSync()
+  const cover   = sync.coverImage
+  const [loading, setLoading] = useState(false)
   const fileRef = useRef(null)
 
   const handleFile = async (e) => {
@@ -48,18 +43,14 @@ function CoverBanner() {
     setLoading(true)
     try {
       const dataUrl = await compressCover(file)
-      localStorage.setItem(COVER_KEY, dataUrl)
-      setCover(dataUrl)
+      await sync.updateCoverImage(dataUrl)
     } finally {
       setLoading(false)
       e.target.value = ''
     }
   }
 
-  const removeCover = () => {
-    localStorage.removeItem(COVER_KEY)
-    setCover(null)
-  }
+  const removeCover = () => sync.updateCoverImage(null)
 
   // ── No cover: show placeholder ──
   if (!cover) {

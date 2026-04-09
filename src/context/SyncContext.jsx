@@ -40,12 +40,16 @@ async function bootstrap() {
 }
 
 export function SyncProvider({ children }) {
-  const [expenses,  setExpenses]  = useState(getExpenses)
-  const [checklist, setChecklist] = useState(getChecklist)
-  const [tripData,  setTripData]  = useState(getTripData)
-  const [documents, setDocuments] = useState(getDocuments)
-  const [shopping,  setShopping]  = useState(getShopping)
-  const [synced,    setSynced]    = useState(false)
+  const [expenses,    setExpenses]    = useState(getExpenses)
+  const [checklist,   setChecklist]   = useState(getChecklist)
+  const [tripData,    setTripData]    = useState(getTripData)
+  const [documents,   setDocuments]   = useState(getDocuments)
+  const [shopping,    setShopping]    = useState(getShopping)
+  const [synced,      setSynced]      = useState(false)
+  const [coverImage,  setCoverImage]  = useState(() => {
+    // seed from localStorage while Firestore loads
+    try { return localStorage.getItem('trip_cover_img') || null } catch (_) { return null }
+  })
 
   // Debounce timers for large documents (avoid Firestore write per keystroke)
   const tripDataTimer   = useRef(null)
@@ -88,6 +92,22 @@ export function SyncProvider({ children }) {
         if (snap.exists()) {
           const items = snap.data().items || []
           setShopping(items); saveShopping(items)
+        }
+      }
+    ))
+
+    // ── Cover image ──────────────────────────────────────
+    unsubs.push(onSnapshot(
+      doc(db, 'trips', TRIP_ID, 'config', 'coverImage'),
+      snap => {
+        if (snap.exists()) {
+          const dataUrl = snap.data().dataUrl || null
+          setCoverImage(dataUrl)
+          // cache locally so it loads instantly on next open
+          try {
+            if (dataUrl) localStorage.setItem('trip_cover_img', dataUrl)
+            else         localStorage.removeItem('trip_cover_img')
+          } catch (_) {}
         }
       }
     ))
@@ -198,14 +218,28 @@ export function SyncProvider({ children }) {
     })
   }, [_writeShopping])
 
+  const updateCoverImage = useCallback(async (dataUrl) => {
+    setCoverImage(dataUrl)
+    try {
+      if (dataUrl) {
+        localStorage.setItem('trip_cover_img', dataUrl)
+        await setDoc(doc(db, 'trips', TRIP_ID, 'config', 'coverImage'), { dataUrl })
+      } else {
+        localStorage.removeItem('trip_cover_img')
+        await setDoc(doc(db, 'trips', TRIP_ID, 'config', 'coverImage'), { dataUrl: null })
+      }
+    } catch (e) { console.error('coverImage write:', e) }
+  }, [])
+
   return (
     <SyncContext.Provider value={{
-      expenses, checklist, tripData, documents, shopping, synced,
+      expenses, checklist, tripData, documents, shopping, synced, coverImage,
       members: tripData?.members || getMembers(),
       addExpense, updateExpense, deleteExpense,
       updateTripData, updateChecklist,
       addDocument, deleteDocument,
       addShoppingItem, updateShoppingItem, deleteShoppingItem,
+      updateCoverImage,
     }}>
       {children}
     </SyncContext.Provider>
